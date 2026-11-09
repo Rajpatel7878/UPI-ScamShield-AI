@@ -1,0 +1,59 @@
+/**
+ * Design tokens for UPI ScamShield AI.
+ *
+ * This is the single source of truth for the visual language. Tailwind reads
+ * these @theme values and generates utilities such as `bg-navy-800`,
+ * `text-brand-300`, `shadow-card` and `rounded-card`. Because @theme variables
+ * are emitted on :root, plain CSS (scrollbars, gradients, keyframes) can use
+ * `var(--color-brand-500)` too.
+ */
+
+@theme {
+  /* Typography */
+  --font-sans:
+    'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, sans-serif;
+  --font-mono:
+    ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono',
+    monospace;
+
+  /* Surfaces */
+  --color-navy-950: #07111f; /* page background */
+  --color-navy-900: #0d1b2a; /* secondary background */
+  --color-navy-800: #122438; /* card background */
+  --color-navy-700: #1a3149; /* borders, hover surfaces */
+  --color-navy-600: #24405c; /* strong borders, scrollbar */
+
+  /* Brand — teal */
+  --color-brand-200: #99f6e4;
+  --color-brand-300: #5eead4;
+  --color-brand-400: #2dd4bf;
+  --color-brand-500: #14b8a6;
+  --color-brand-600: #0d9488;
+  --color-brand-700: #0f766e;
+
+  /* Semantic feedback */
+  --color-success-400: #34d399;
+  --color-success-500: #10b981;
+  --color-warning-400: #fbbf24;
+  --color-warning-500: #f59e0b;
+  --color-danger-400: #f87171;
+  --color-danger-500: #ef4444;
+
+  /* Text */
+  --color-ink: #f8fafc; /* primary text */
+  --color-muted: #94a3b8; /* secondary text */
+
+  /* Radii */
+  --radius-card: 1rem;
+  --radius-field: 0.5rem;
+
+  /* Elevation */
+  --shadow-card:
+    0 1px 2px rgb(2 6 23 / 0.4), 0 12px 32px -12px rgb(2 6 23 / 0.65);
+  --shadow-lift:
+    0 2px 4px rgb(2 6 23 / 0.4), 0 24px 48px -24px rgb(2 6 23 / 0.9);
+
+  /* Motion */
+  --ease-soft: cubic-bezier(0.22, 1, 0.36, 1);
+}

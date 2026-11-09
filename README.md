@@ -4,10 +4,10 @@
 
 AI-powered fraud detection and digital payment security.
 
-> **Project status: Phase 1 — Foundation.** This repository currently contains
-> the working full-stack skeleton: React frontend, FastAPI backend, environment
-> configuration, and connectivity between them. The AI fraud detection engine
-> is **not implemented yet** and is planned for a later phase.
+> **Project status: Phase 2 — Design system.** Phases 1 and 2 are complete: the
+> working full-stack foundation plus a reusable, token-driven frontend design
+> system. The AI fraud detection engine is **not implemented yet** and is
+> planned for a later phase.
 
 ---
 
@@ -34,13 +34,19 @@ assessment layer.
 
 ## 3. Objectives
 
-Phase 1 objectives (all delivered):
+Phase 1 objectives (delivered):
 
 - Establish a clean React + Vite frontend with routing, styling, and a service layer.
 - Establish a modular FastAPI backend with configuration and error handling.
 - Provide health-check endpoints for monitoring and integration testing.
 - Wire frontend → backend communication through environment variables and CORS.
 - Document setup, architecture, and the roadmap.
+
+Phase 2 objectives (delivered):
+
+- Define a token-driven visual identity (surfaces, brand, semantic colors, type scale, motion).
+- Ship a reusable component library with accessible, documented states.
+- Keep the component catalogue verifiable on an internal `/design-system` route.
 
 Later-phase objectives are listed in the [roadmap](#12-development-roadmap) and
 are explicitly marked as not implemented.
@@ -81,6 +87,18 @@ are explicitly marked as not implemented.
 - No database connection exists yet; `GET /health` therefore reports
   `"database": "not_configured"`.
 
+### Frontend design system
+
+- Tokens live in `frontend/src/styles/design-tokens.css` and are consumed as
+  Tailwind utilities such as `bg-navy-800`, `text-brand-300`, `rounded-card`
+  and `shadow-card`.
+- Primitives are in `src/components/ui`, layout pieces in
+  `src/components/common`, and navigation elements in `src/components/navigation`.
+- The internal showcase at <http://localhost:5173/design-system> documents the
+  brand, typography, palette, buttons, cards, badges, form controls, loading
+  states, feedback, navigation and responsive layouts. It is linked from the
+  footer only, never the primary navigation.
+
 Detailed layer-by-layer notes: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ## 6. Project Folder Structure
@@ -94,8 +112,12 @@ UPI-ScamShield-AI/
 │   │   ├── assets/
 │   │   │   └── logo.svg
 │   │   ├── components/
+│   │   │   ├── ui/            # buttons, cards, badges, forms, feedback
+│   │   │   ├── common/        # container, headers, brand logo, grid
+│   │   │   ├── navigation/    # nav link, avatar, dropdown
 │   │   │   └── ApiStatusCard.jsx
 │   │   ├── pages/
+│   │   │   ├── DesignSystem.jsx
 │   │   │   ├── Home.jsx
 │   │   │   └── NotFound.jsx
 │   │   ├── layouts/
@@ -108,7 +130,10 @@ UPI-ScamShield-AI/
 │   │   ├── context/
 │   │   │   ├── AppContext.js
 │   │   │   └── AppProvider.jsx
+│   │   ├── styles/
+│   │   │   └── design-tokens.css
 │   │   ├── utils/
+│   │   │   ├── cn.js
 │   │   │   └── constants.js
 │   │   ├── App.jsx
 │   │   ├── main.jsx
@@ -292,12 +317,13 @@ state in the header and in the status card.
 | Phase | Scope | Status |
 | --- | --- | --- |
 | 1 | Project foundation, routing, Tailwind, health API, CORS, env config, docs | **Implemented** |
-| 2 | Database layer (SQLAlchemy engine, models, migrations), persisted scan records | *Planned — not implemented* |
-| 3 | Fraud detection engine (rules + ML risk scoring, explainable output) | *Planned — not implemented* |
-| 4 | Scan APIs: submit a UPI request/message, receive risk verdict with reasons | *Planned — not implemented* |
-| 5 | User accounts and authentication (JWT), scan history | *Planned — not implemented* |
-| 6 | Analytics dashboard, reporting, admin views | *Planned — not implemented* |
-| 7 | Deployment, monitoring, rate limiting, hardening | *Planned — not implemented* |
+| 2 | Frontend design system: tokens, component library, `/design-system` showcase | **Implemented** |
+| 3 | Database layer (SQLAlchemy engine, models, migrations), persisted scan records | *Planned — not implemented* |
+| 4 | Fraud detection engine (rules + ML risk scoring, explainable output) | *Planned — not implemented* |
+| 5 | Scan APIs: submit a UPI request/message, receive risk verdict with reasons | *Planned — not implemented* |
+| 6 | User accounts and authentication (JWT), scan history | *Planned — not implemented* |
+| 7 | Analytics dashboard, reporting, admin views | *Planned — not implemented* |
+| 8 | Deployment, monitoring, rate limiting, hardening | *Planned — not implemented* |
 
 No AI or fraud-scoring functionality exists in the current codebase; nothing in
 the UI claims otherwise.

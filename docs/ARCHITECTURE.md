@@ -1,8 +1,8 @@
 # Initial Architecture
 
-This document describes the Phase 1 foundation. It intentionally excludes the
-AI fraud detection engine, persistence, and authentication, which belong to
-later phases.
+This document describes the Phase 1 foundation and the Phase 2 frontend design
+system. It intentionally excludes the AI fraud detection engine, persistence,
+and authentication, which belong to later phases.
 
 ## Overview
 
@@ -31,8 +31,8 @@ browser requests from the origin configured in `backend/.env`
 | Entry point | `app/main.py` | Creates the FastAPI app, registers CORS, error handlers and the API router |
 | API | `app/api/` | HTTP routes; `health.py` exposes `GET /` and `GET /health` |
 | Schemas | `app/schemas/` | Pydantic request/response models |
-| Services | `app/services/` | Reserved for the fraud detection engine (Phase 2+) |
-| Models | `app/models/` | Reserved for SQLAlchemy ORM models (Phase 2+) |
+| Services | `app/services/` | Reserved for the fraud detection engine (Phase 4+) |
+| Models | `app/models/` | Reserved for SQLAlchemy ORM models (Phase 3+) |
 | Database | `app/database/` | Reserved for engine/session setup; no connection exists yet |
 | Core | `app/core/` | Settings (`config.py`) and centralized exception handlers (`errors.py`) |
 
@@ -57,14 +57,30 @@ Validation failures additionally include an `errors` array.
 | Layer | Location | Responsibility |
 | --- | --- | --- |
 | Entry point | `src/main.jsx` | Mounts React and imports global Tailwind styles |
-| Routing | `src/App.jsx` | `BrowserRouter`, layout route, home route, 404 |
+| Routing | `src/App.jsx` | `BrowserRouter`, layout route, home route, `/design-system`, 404 |
 | Layout | `src/layouts/` | Header, API status pill, footer, `<Outlet />` |
-| Pages | `src/pages/` | `Home` welcome screen and `NotFound` |
-| Components | `src/components/` | Reusable UI such as `ApiStatusCard` |
+| Pages | `src/pages/` | `Home`, `DesignSystem` showcase, `NotFound` |
+| UI primitives | `src/components/ui/` | Buttons, cards, badges, form controls, alerts, spinners, skeletons, states |
+| Shared components | `src/components/common/` | Brand logo, container, page/section headers, divider, responsive grid |
+| Navigation | `src/components/navigation/` | Nav link, avatar, dropdown menu |
+| Legacy page component | `src/components/ApiStatusCard.jsx` | Phase 1 health card, now built on the UI primitives |
+| Design tokens | `src/styles/design-tokens.css` | Surfaces, brand/semantic colors, type, radii, elevation, easing |
+| Global styles | `src/index.css` | Base layer, type scale classes, scrollbars, focus, motion, reduced-motion |
 | Services | `src/services/` | `apiClient` (axios instance + error normalization) and endpoint modules |
 | Hooks | `src/hooks/` | `useHealthCheck` for API availability |
 | Context | `src/context/` | `AppContext` provides app metadata and health state |
-| Utils | `src/utils/` | Shared constants |
+| Utils | `src/utils/` | `cn` class joiner and shared constants |
+
+## Frontend design system
+
+Components never hardcode palette values; they compose Tailwind utilities
+generated from `design-tokens.css`. The type scale (`type-display`, `type-h1`,
+`type-body`, `type-label`, `type-caption`, `type-mono`, `type-stat`) lives in
+`src/index.css` so headings and labels stay consistent across pages.
+
+Interactive primitives share the same focus treatment and disabled behaviour.
+The `/design-system` route renders every variant and is linked from the footer
+only; it is a development reference, not product navigation.
 
 ## Health check semantics
 
