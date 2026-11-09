@@ -9,7 +9,7 @@ function Home() {
   return (
     <div className="mx-auto flex w-full max-w-xl flex-col items-center text-center">
       <span className="inline-flex items-center gap-2 rounded-full border border-brand-500/30 bg-brand-500/10 px-3 py-1 text-xs font-medium tracking-wide text-brand-300">
-        Phase 2 &middot; Design system
+        Internal &middot; Project status
       </span>
 
       <img

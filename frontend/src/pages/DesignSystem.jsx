@@ -621,8 +621,8 @@ function DesignSystem() {
             <DemoLabel>Links</DemoLabel>
             <div className="flex flex-wrap gap-2">
               <NavLink to="/design-system">This page</NavLink>
-              <NavLink to="/" end>
-                Welcome screen
+              <NavLink to="/status">
+                Project status
               </NavLink>
             </div>
           </BaseCard>

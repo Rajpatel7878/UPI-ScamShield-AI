@@ -23,6 +23,7 @@ const SIZES = {
 }
 
 export function Button({
+  as: Tag = 'button',
   variant = 'primary',
   size = 'md',
   isLoading = false,
@@ -36,10 +37,11 @@ export function Button({
   type = 'button',
   ...props
 }) {
+  const isNativeButton = Tag === 'button'
+
   return (
-    <button
-      type={type}
-      disabled={disabled || isLoading}
+    <Tag
+      {...(isNativeButton ? { type, disabled: disabled || isLoading } : {})}
       aria-busy={isLoading || undefined}
       className={cn(
         BASE,
@@ -57,7 +59,7 @@ export function Button({
       )}
       {isLoading ? loadingText || children : children}
       {!isLoading && rightIcon}
-    </button>
+    </Tag>
   )
 }
 
