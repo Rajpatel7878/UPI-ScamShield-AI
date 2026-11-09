@@ -17,21 +17,29 @@ export function BrandLogo({
   size = 'md',
   showTagline = true,
   asLink = true,
+  to = '/',
+  compact = false,
   className,
 }) {
   const scale = SIZES[size] ?? SIZES.md
 
-  const content = (
+  const mark = (
+    <span
+      className={cn(
+        'inline-flex shrink-0 items-center justify-center bg-linear-to-br from-brand-400 to-brand-600 text-navy-950 shadow-lg shadow-brand-500/25',
+        scale.mark,
+      )}
+      aria-hidden="true"
+    >
+      <ShieldCheck className={scale.icon} strokeWidth={2.2} />
+    </span>
+  )
+
+  const content = compact ? (
+    mark
+  ) : (
     <>
-      <span
-        className={cn(
-          'inline-flex shrink-0 items-center justify-center bg-linear-to-br from-brand-400 to-brand-600 text-navy-950 shadow-lg shadow-brand-500/25',
-          scale.mark,
-        )}
-        aria-hidden="true"
-      >
-        <ShieldCheck className={scale.icon} strokeWidth={2.2} />
-      </span>
+      {mark}
       <span className="flex min-w-0 flex-col leading-tight">
         <span
           className={cn(
@@ -56,7 +64,7 @@ export function BrandLogo({
 
   return (
     <Link
-      to="/"
+      to={to}
       aria-label={`${APP_NAME} — home`}
       className={cn(classes, 'rounded-lg transition-opacity duration-200 hover:opacity-85')}
     >

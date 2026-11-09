@@ -43,7 +43,7 @@ function MainLayout() {
 
       <footer className="border-t border-white/5">
         <Container className="flex flex-col items-center justify-between gap-2 py-5 text-xs text-slate-500 sm:flex-row">
-          <p>{appName} &middot; Frontend build (Phase 3)</p>
+          <p>{appName} &middot; Frontend build (Phase 4)</p>
           <div className="flex items-center gap-4">
             <p>Fraud detection engine planned for a later phase.</p>
             <Link
