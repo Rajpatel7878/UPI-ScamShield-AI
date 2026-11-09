@@ -1,5 +1,5 @@
 import { ShieldCheck, Loader2 } from 'lucide-react'
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { AppLayout } from '../components/layout/AppLayout.jsx'
 import {
@@ -43,18 +43,19 @@ function DemoResult() {
   return <AnalysisResult result={demoResult} hasResult={true} onDismiss={() => {}} />
 }
 
-/** Detection page. */export default function Detection() {
-  const [contentType, setContentType] = useState<'sms' | 'whatsapp' | 'payment' | 'url'>('sms')
+/** Detection page. */
+export default function Detection() {
+  const [contentType, setContentType] = useState('sms')
   const [inputValue, setInputValue] = useState('')
   const [showResult, setShowResult] = useState(false)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
-  const inputRef = useRef<HTMLTextAreaElement>(null)
+  const inputRef = useRef(null)
 
   // Set example text when content type changes
   useEffect(() => {
     const examples = {
       sms: 'Your bank account will be blocked today. Complete KYC immediately using this link.',
-      whatsapp: 'Congratulations! You have won a ₹5,000 cashback reward. Pay a small processing fee to claim it.',
+      whatsapp: 'Congratulations! You have won a 5000 cashback reward. Pay a small processing fee to claim it.',
       payment: 'Your UPI payment is pending. Share your OTP with our support agent to complete verification.',
       url: 'https://example.com/upi-kyc-verify',
     }
@@ -80,7 +81,7 @@ function DemoResult() {
     const text = inputValue.trim()
     if (!text) return
 
-    // Simulate analysis interaction — UI only, no real API
+    // Simulate analysis interaction - UI only, no real API
     setIsAnalyzing(true)
     setTimeout(() => {
       setIsAnalyzing(false)
@@ -96,6 +97,9 @@ function DemoResult() {
         demonstration results are illustrative and do not represent real
         analysis outcomes until backend integration.
       </p>
+
+      {/* Demo result after analysis */}
+      {showResult && <DemoResult />}
 
       {/* Detection Header */}
       <header className="pt-6">
@@ -167,4 +171,4 @@ function DemoResult() {
       </section>
     </AppLayout>
   )
-}
+}
