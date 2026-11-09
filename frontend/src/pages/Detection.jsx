@@ -1,59 +1,170 @@
-import { Lock, ScanLine, ShieldCheck } from 'lucide-react'
+import { ShieldCheck, Loader2 } from 'lucide-react'
+import { useRef, useState } from 'react'
+
+import { AppLayout } from '../components/layout/AppLayout.jsx'
 import {
-  BaseCard,
-  Button,
-  InfoCard,
-  StatusBadge,
-} from '../components/ui/index.js'
+  ContentTypeSelector,
+  MessageInput,
+  URLInput,
+  ExampleMessages,
+  PrivacyNotice,
+  AnalyzeButton,
+  AnalysisResult,
+  DetectionEmptyState,
+} from '../components/detection/index.js'
 
-function Detection() {
-  return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,0.7fr)]">
-      <BaseCard>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <span className="inline-flex size-9 items-center justify-center rounded-xl bg-brand-500/10 text-brand-300 ring-1 ring-brand-500/20">
-              <ScanLine className="size-4" aria-hidden="true" />
-            </span>
-            <h2 className="type-h2">Analysis workspace</h2>
-          </div>
-          <StatusBadge status="neutral">Not connected</StatusBadge>
-        </div>
-
-        <p className="type-body mt-3 max-w-xl text-muted">
-          Paste a suspicious SMS, WhatsApp message, payment request, or URL.
-          The analysis flow will be implemented in a later phase.
-        </p>
-
-        <div className="mt-6 rounded-xl border border-dashed border-navy-700 bg-navy-950/40 p-6 text-center">
-          <p className="type-label">Message input</p>
-          <p className="type-caption mx-auto mt-2 max-w-sm">
-            The input, URL checks, and AI-assisted assessment are not available
-            yet. Nothing is submitted or stored on this page.
-          </p>
-          <Button className="mt-5" disabled leftIcon={<ScanLine className="size-4" aria-hidden="true" />}>
-            Analyze message
-          </Button>
-        </div>
-      </BaseCard>
-
-      <div className="space-y-4">
-        <InfoCard title="What will be checked" icon={ShieldCheck}>
-          Links, urgent language, impersonation patterns, and payment
-          instructions will be reviewed and explained in plain language.
-        </InfoCard>
-        <InfoCard
-          title="Your credentials stay private"
-          icon={Lock}
-          tone="warning"
-        >
-          ScamShield AI will never ask for your OTP, UPI PIN, or banking
-          password. Verify unexpected requests through your bank&rsquo;s
-          official app or website.
-        </InfoCard>
-      </div>
-    </div>
-  )
+// cn utility function (inline)
+function cn(...classes) {
+  return classes.filter(Boolean).join(' ')
 }
 
-export default Detection
+/** Demo result shown after a simulated analyze click. */
+function DemoResult() {
+  const demoResult = {
+    riskScore: 78,
+    severity: 'high',
+    category: 'Phishing attempt',
+    summary:
+      'The submitted content contains patterns commonly associated with UPI phishing scams.',
+    indicators: [
+      'Urgent language prompting immediate action',
+      'Suspicious external link included',
+      'Request for verification via unfamiliar URL',
+    ],
+    recommendedActions: [
+      'Do not click any included links',
+      'Verify the request through your bank\'s official app',
+      'Delete the message and block the sender',
+    ],
+    safetyWarning:
+      'Never share your UPI PIN, OTP, or banking password. Legitimate banks never ask for these.',
+  }
+
+  return <AnalysisResult result={demoResult} hasResult={true} onDismiss={() => {}} />
+}
+
+/** Detection page. */export default function Detection() {
+  const [contentType, setContentType] = useState<'sms' | 'whatsapp' | 'payment' | 'url'>('sms')
+  const [inputValue, setInputValue] = useState('')
+  const [showResult, setShowResult] = useState(false)
+  const [isAnalyzing, setIsAnalyzing] = useState(false)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
+
+  // Set example text when content type changes
+  useEffect(() => {
+    const examples = {
+      sms: 'Your bank account will be blocked today. Complete KYC immediately using this link.',
+      whatsapp: 'Congratulations! You have won a ₹5,000 cashback reward. Pay a small processing fee to claim it.',
+      payment: 'Your UPI payment is pending. Share your OTP with our support agent to complete verification.',
+      url: 'https://example.com/upi-kyc-verify',
+    }
+    setInputValue(examples[contentType])
+  }, [contentType])
+
+  const handleContentTypeChange = (key) => {
+    setContentType(key)
+    setInputValue('')
+  }
+
+  const handleInputChange = (value) => {
+    setInputValue(value)
+  }
+
+  const handleClear = () => {
+    setInputValue('')
+    setShowResult(false)
+    inputRef.current?.focus()
+  }
+
+  const handleAnalyze = () => {
+    const text = inputValue.trim()
+    if (!text) return
+
+    // Simulate analysis interaction — UI only, no real API
+    setIsAnalyzing(true)
+    setTimeout(() => {
+      setIsAnalyzing(false)
+      setShowResult(true)
+    }, 1000)
+  }
+
+  return (
+    <AppLayout>
+      {/* Demo data label */}
+      <p className="mt-3 text-xs text-slate-500">
+        <span className="font-medium">Demo Data</span> — All values and
+        demonstration results are illustrative and do not represent real
+        analysis outcomes until backend integration.
+      </p>
+
+      {/* Detection Header */}
+      <header className="pt-6">
+        <div className="max-w-7xl mx-auto">
+          <h2 className="type-h2 mb-1">
+            Analyze Suspicious Content
+          </h2>
+          <p className="type-body text-muted mb-4">
+            Check suspicious UPI messages, payment requests, SMS, WhatsApp
+            messages, and URLs to understand potential security risks.
+          </p>
+          <p className="type-caption text-slate-500">
+            <strong>AI-assisted security analysis</strong> — This interface is
+            prepared for future AI integration. Currently, analysis is a local
+            demonstration.
+          </p>
+        </div>
+      </header>
+
+      {/* Content Type Selector */}
+      <section className="mb-6">
+        <ContentTypeSelector
+          selectedKey={contentType}
+          onSelect={handleContentTypeChange}
+        />
+      </section>
+
+      {/* Input Area */}
+      <section className="mb-6">
+        {contentType === 'url' ? (
+          <URLInput
+            value={inputValue}
+            onChange={handleInputChange}
+            onClear={handleClear}
+            disabled={isAnalyzing}
+          />
+        ) : (
+          <MessageInput
+            contentType={contentType}
+            value={inputValue}
+            onChange={handleInputChange}
+            onClear={handleClear}
+            disabled={isAnalyzing}
+          />
+        )}
+      </section>
+
+      {/* Example Content */}
+      {contentType !== 'url' && (
+        <section className="mb-6">
+          <ExampleMessages
+            contentType={contentType}
+            inputValue={inputValue}
+            onExampleSelect={() => {}}
+          />
+        </section>
+      )}
+
+      {/* Privacy Notice */}
+      <PrivacyNotice />
+
+      {/* Analyze Button */}
+      <section className="mb-6">
+        <AnalyzeButton
+          isDisabled={!inputValue.trim() || isAnalyzing}
+          onClick={handleAnalyze}
+          showDemoNotice={!showResult}
+        />
+      </section>
+    </AppLayout>
+  )
+}
