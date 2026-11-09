@@ -16,14 +16,21 @@ class Settings(BaseSettings):
     )
 
     app_name: str = "UPI ScamShield AI"
-    app_version: str = "0.1.0"
+    app_version: str = "1.0.0"
     environment: str = "development"
+    debug: bool = True
+    api_prefix: str = "/api/v1"
     frontend_url: str = "http://localhost:5173"
 
     @property
     def cors_origins(self) -> list[str]:
         """Origins allowed to call this API from a browser."""
         return [self.frontend_url.rstrip("/")]
+
+    @property
+    def api_v1_prefix(self) -> str:
+        """Versioned API prefix."""
+        return self.api_prefix.rstrip("/")
 
 
 @lru_cache

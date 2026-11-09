@@ -3,7 +3,7 @@
 from fastapi import APIRouter
 
 from app.core.config import get_settings
-from app.schemas.health import HealthResponse, RootResponse
+from app.schemas.health import HealthResponse, RootResponse, SystemInfoResponse
 
 router = APIRouter(tags=["system"])
 
@@ -38,4 +38,24 @@ async def health_check() -> HealthResponse:
         status="healthy",
         database="not_configured",
         service=settings.app_name,
+        environment=settings.environment,
+    )
+
+
+@router.get(
+    "/system/info",
+    response_model=SystemInfoResponse,
+    summary="System information",
+    description="Returns safe application metadata.",
+)
+async def system_info() -> SystemInfoResponse:
+    settings = get_settings()
+    return SystemInfoResponse(
+        app_name=settings.app_name,
+        app_version=settings.app_version,
+        environment=settings.environment,
+        api_prefix=settings.api_prefix,
+        available_modules=["system", "health"],
+        database_integration="not_configured",
+        ai_integration="not_configured",
     )
