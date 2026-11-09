@@ -1,4 +1,3 @@
-import { ShieldCheck, Loader2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 
 import { AppLayout } from '../components/layout/AppLayout.jsx'
@@ -10,13 +9,7 @@ import {
   PrivacyNotice,
   AnalyzeButton,
   AnalysisResult,
-  DetectionEmptyState,
 } from '../components/detection/index.js'
-
-// cn utility function (inline)
-function cn(...classes) {
-  return classes.filter(Boolean).join(' ')
-}
 
 /** Demo result shown after a simulated analyze click. */
 function DemoResult() {
