@@ -1,4 +1,4 @@
-\"\"\"Text normalizer for the rule-based detection engine.\n\nNormalizes whitespace and text case before analysis. Supports English and
+"""Text normalizer for the rule-based detection engine.\n\nNormalizes whitespace and text case before analysis. Supports English and
 common Hinglish expressions. Does not modify the original submitted text.\n\"\"\"\nimport re\nfrom typing import Optional
 
 

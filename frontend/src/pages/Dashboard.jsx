@@ -11,11 +11,15 @@ import {
   QuickActions,
 } from '../components/dashboard/index.js'
 
-import { STATS_CARDS } from '../mock-data/dashboard.js'
-import { Button } from '../components/ui/Button.jsx'
+import { useAuth } from '../context/AppContext.js'
+import { createApiClient } from '../services/apiClient.js'
 
 /** Dashboard page. */
 export default function Dashboard() {
+  const { user, isAuthenticated } = useAuth()
+  const api = createApiClient()
+
+  const [stats, setStats] = useState(null)
   const [refreshing, setRefreshing] = useState(false)
   const [currentDate, setCurrentDate] = useState('')
 
@@ -32,20 +36,51 @@ export default function Dashboard() {
     )
   }, [])
 
-  // Simulate a refresh interaction — UI only, no real data fetch
+  // Fetch statistics from backend
+  useEffect(() => {
+    if (!isAuthenticated) return
+
+    const fetchStats = async () => {
+      setRefreshing(true)
+      try {
+        const response = await api.get('/dashboard/stats')
+        setStats(response.data)
+      } catch (err) {
+        const message =
+          err.response?.data?.detail ||
+          err.message ||
+          'Failed to load dashboard statistics.'
+        alert(message)
+      } finally {
+        setRefreshing(false)
+      }
+    }
+
+    fetchStats()
+  }, [isAuthenticated])
+
+  // Simulate a refresh interaction — UI only; real refresh re-fetches data
   const handleRefresh = () => {
     setRefreshing(true)
+    // Re-fetch stats in addition to the skeleton animation
+    const fetchStats = async () => {
+      try {
+        const response = await api.get('/dashboard/stats')
+        setStats(response.data)
+      } catch (err) {
+        // swallow fetch errors during animation
+      }
+    }
+    fetchStats()
     setTimeout(() => setRefreshing(false), 1200)
+  }
+
+  if (!isAuthenticated) {
+    return null
   }
 
   return (
     <AppLayout>
-      {/* Demo data label */}
-      <p className="mt-3 text-xs text-slate-500">
-        <span className="font-medium">Demo Data</span> — All values and charts are
-        illustrative and do not represent real user data until backend integration.
-      </p>
-
       {/* Security Overview Header */}
       <header className="pt-6">
         <div className="max-w-7xl mx-auto">
@@ -55,7 +90,7 @@ export default function Dashboard() {
             about your digital payment security.
           </p>
 
-          {/* Welcome message + date + refresh + analyze button */}
+          {/* Welcome message + date + refresh */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 sm:gap-2">
             <p className="type-body text-slate-400">Welcome back.</p>
             <p className="type-body text-slate-400 sm:ml-4">{currentDate}</p>
@@ -74,45 +109,62 @@ export default function Dashboard() {
               )}
               Refresh
             </button>
-
-            <Button
-              as={RouterLink}
-              to="/detect"
-              size="sm"
-              variant="primary"
-              rightIcon={<ShieldCheck className="size-4" aria-hidden="true" />}
-            >
-              Analyze Content
-            </Button>
           </div>
         </div>
       </header>
 
       {/* Statistics Cards Row */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 mt-6">
-        {STATS_CARDS.map((card) => (
-          <DashboardStatsCard
-            key={card.id}
-            label={card.label}
-            value={card.value}
-            description={card.description}
-            icon={card.icon}
-            tone={card.tone}
-          />
-        ))}
+        {stats && stats.risk_distribution
+          ? Object.entries(stats.risk_distribution).map(([riskLevel, count]) => (
+              <DashboardStatsCard
+                key={riskLevel}
+                label={riskLevel}
+                value={count || 0}
+                description={'Scans at this risk level'}
+                icon='ShieldCheck'
+                tone='neutral'
+              />
+            ))
+          : (
+              <DashboardStatsCard
+                label='Total Scans'
+                value={stats ? stats.total_scans || 0 : 0}
+                description={'No scan data available'}
+                icon='Clock'
+                tone='neutral'
+              />
+            )}
       </div>
 
       {/* Risk Distribution + Activity Charts Row (desktop: side-by-side, mobile: stacked) */}
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 mt-6">
-        <RiskDistributionChart />
-        <ActivityChart />
+        {stats && stats.risk_distribution
+          ? (
+              <>
+                <RiskDistributionChart
+                  distribution={stats.risk_distribution}
+                />
+                <ActivityChart
+                  recent_activity={stats.recent_activity || []}
+                />
+              </>
+            )
+          : (
+              <RiskDistributionChart />
+              <ActivityChart />
+            )}
       </div>
 
       {/* Recent Scan Activity */}
-      <RecentScans />
+      {stats && stats.recent_scans
+        ? <RecentScans scans={stats.recent_scans} />
+        : <RecentScans />}
 
       {/* Risk Insights Panel */}
-      <RiskInsights />
+      {stats && stats.risk_insights
+        ? <RiskInsights insights={stats.risk_insights} />
+        : <RiskInsights />}
 
       {/* Quick Actions */}
       <QuickActions />

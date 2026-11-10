@@ -1,4 +1,4 @@
-\"\"\"Centralized rule definitions for the rule-based fraud detection engine.
+"""Centralized rule definitions for the rule-based fraud detection engine.
 
 Each rule contains:
 - Unique rule ID

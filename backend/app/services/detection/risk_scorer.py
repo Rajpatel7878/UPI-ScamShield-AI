@@ -1,4 +1,4 @@
-\"\"\"Risk scorer for the rule-based fraud detection engine.
+"""Risk scorer for the rule-based fraud detection engine.
 
 Implements a transparent weighted scoring approach where each matched rule
 contributes a predefined number of points. The total score is capped at 100,

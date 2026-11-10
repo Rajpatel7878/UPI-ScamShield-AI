@@ -1,5 +1,5 @@
 import { FileText, LogIn, ShieldCheck, UserPlus } from 'lucide-react'
-import { Route, Routes } from 'react-router-dom'
+import { Route, Routes, Redirect } from 'react-router-dom'
 import { AppLayout } from '../components/layout/AppLayout.jsx'
 import MainLayout from '../layouts/MainLayout.jsx'
 import Analytics from '../pages/Analytics.jsx'
@@ -11,8 +11,8 @@ import History from '../pages/History.jsx'
 import Home from '../pages/Home.jsx'
 import Landing from '../pages/Landing.jsx'
 import NotFound from '../pages/NotFound.jsx'
-import PlaceholderPage from '../pages/PlaceholderPage.jsx'
 import Settings from '../pages/Settings.jsx'
+import { ProtectedRoute } from '../components/routing/ProtectedRoute.js'
 
 export function AppRoutes() {
   return (
@@ -20,18 +20,28 @@ export function AppRoutes() {
       <Route path="/" element={<Landing />} />
 
       <Route element={<AppLayout />}>
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/detect" element={<Detection />} />
-        <Route path="/history" element={<History />} />
-        <Route path="/analytics" element={<Analytics />} />
-        <Route path="/awareness" element={<Awareness />} />
-        <Route path="/settings" element={<Settings />} />
+
+        {/* Public routes - always accessible */}
+
+        <Route path="/login" element={<PlaceholderPage />} />
+        <Route path="/register" element={<PlaceholderPage />} />
+        <Route path="/privacy" element={<PlaceholderPage />} />
+        <Route path="/terms" element={<PlaceholderPage />} />
+
+        {/* Protected routes - require authentication */}
+        <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute />} />
+        <Route path="/detect" element={<ProtectedRoute><Detection /></ProtectedRoute />} />
+        <Route path="/history" element={<ProtectedRoute><History /></ProtectedRoute />} />
+        <Route path="/analytics" element={<ProtectedRoute><Analytics /></ProtectedRoute />} />
+        <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute />} />
+
       </Route>
 
-      <Route element={<MainLayout />}>
+      <Route element={<MainLayout()>}>
         <Route path="/status" element={<Home />} />
         <Route path="/design-system" element={<DesignSystem />} />
 
+        {/* Login/Register placeholders within main layout */}
         <Route
           path="/login"
           element={
@@ -56,33 +66,9 @@ export function AppRoutes() {
             />
           }
         />
-        <Route
-          path="/privacy"
-          element={
-            <PlaceholderPage
-              eyebrow="Legal"
-              title="Privacy Policy"
-              description="This policy has not been published yet."
-              icon={FileText}
-              note="This placeholder is reserved for the privacy policy that will be published before analysis features accept real content. The current build stores no submitted messages or links."
-            />
-          }
-        />
-        <Route
-          path="/terms"
-          element={
-            <PlaceholderPage
-              eyebrow="Legal"
-              title="Terms of Use"
-              description="These terms have not been published yet."
-              icon={ShieldCheck}
-              note="This placeholder is reserved for the terms that will accompany the product. Nothing on this site provides a guaranteed fraud assessment or replaces verification with your bank."
-            />
-          }
-        />
-
-        <Route path="*" element={<NotFound />} />
       </Route>
+
+      <Route path="*" element={<NotFound />} />
     </Routes>
   )
 }

@@ -1,4 +1,4 @@
-\"\"\"Rule detector for the rule-based fraud detection engine.
+"""Rule detector for the rule-based fraud detection engine.
 
 Analyzes submitted text against all registered detection rules and returns
 matched indicators with explanations, severities, and score contributions.

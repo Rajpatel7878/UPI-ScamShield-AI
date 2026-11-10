@@ -1,4 +1,4 @@
-import { ShieldCheck, Lock, Gift, UserRound, AlertCircle } from 'lucide-react'
+import { ShieldCheck, AlertCircle } from 'lucide-react'
 import { cn } from '../../utils/cn.js'
 
 /** Risk severity color mapping. */

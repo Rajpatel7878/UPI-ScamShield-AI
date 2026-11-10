@@ -1,6 +1,5 @@
 import { Loader2 } from 'lucide-react'
 import { cn } from '../../utils/cn.js'
-import { useState } from 'react'
 
 /** Fictional examples for message modes. */
 const MESSAGE_EXAMPLES = [
@@ -37,7 +36,6 @@ const URL_EXAMPLES = [
 
 export function ExampleMessages({
   contentType = 'sms',
-  inputValue,
   onInputChange,
   onExampleSelect,
   isLoading = false,

@@ -1,6 +1,5 @@
 import { Loader2 } from 'lucide-react'
 import { cn } from '../../utils/cn.js'
-import { useState } from 'react'
 
 /** Minimum and maximum character limits per content type. */
 const LIMITS = {
@@ -31,15 +30,11 @@ export function MessageInput({
   value,
   onChange,
   onClear,
-  onValidate,
   disabled = false,
 }) {
-  const [showCounter, setShowCounter] = useState(true)
-
   const handleClear = () => {
     onClear()
-    setShowCounter(false)
-    setTimeout(() => setShowCounter(true), 150)
+    setTimeout(() => {}, 150)
   }
 
   const limits = LIMITS[contentType]

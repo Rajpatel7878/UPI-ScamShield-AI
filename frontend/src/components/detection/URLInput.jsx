@@ -16,17 +16,13 @@ export function URLInput({
   value,
   onChange,
   onClear,
-  onValidate,
   disabled = false,
 }) {
-  const [showCounter, setShowCounter] = useState(true)
   const [urlValid, setUrlValid] = useState(false)
-  const [isFetching, setIsFetching] = useState(false)
 
   const handleClear = () => {
     onClear()
-    setShowCounter(false)
-    setTimeout(() => setShowCounter(true), 150)
+    setTimeout(() => {}, 150)
     setUrlValid(false)
   }
 

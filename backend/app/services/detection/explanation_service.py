@@ -1,4 +1,4 @@
-\"\"\"Explanation service for the rule-based fraud detection engine.
+"""Explanation service for the rule-based fraud detection engine.
 
 Provides clear explanations and relevant recommendations for every matched
 indicator. Ensures that every matched indicator has a clear explanation and

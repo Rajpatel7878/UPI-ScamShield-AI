@@ -1,5 +1,4 @@
 import { Loader2 } from 'lucide-react'
-import { cn } from '../../utils/cn.js'
 import { useState } from 'react'
 
 export function AnalyzeButton({
@@ -14,14 +13,9 @@ export function AnalyzeButton({
     if (isDisabled) return
 
     setIsLoading(true)
-    try {
-      // Simulate a brief local interaction only — no API call
-      await new Promise((resolve) => setTimeout(resolve, 800))
-    } catch (e) {
-      // ignore
-    } finally {
-      setIsLoading(false)
-    }
+    // Simulate a brief local interaction only — no API call
+    await new Promise((resolve) => setTimeout(resolve, 800))
+    setIsLoading(false)
     onClick?.(e)
   }
 
