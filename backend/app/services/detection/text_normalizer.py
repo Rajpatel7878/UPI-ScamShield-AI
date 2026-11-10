@@ -1,5 +1,10 @@
-"""Text normalizer for the rule-based detection engine.\n\nNormalizes whitespace and text case before analysis. Supports English and
-common Hinglish expressions. Does not modify the original submitted text.\n\"\"\"\nimport re\nfrom typing import Optional
+"""Text normalizer for the rule-based detection engine.
+
+Normalizes whitespace and text case before analysis. Supports English and
+common Hinglish expressions. Does not modify the original submitted text.
+"""
+import re
+from typing import Optional
 
 
 def normalize_text(content: str) -> str:
@@ -68,7 +73,8 @@ def extract_urls(content: str) -> list[str]:
     return urls
 
 
-def is_suspicious_shortened_url(text: str) -> bool """Check if text contains suspicious shortened URL indicators.
+def is_suspicious_shortened_url(text: str) -> bool:
+    """Check if text contains suspicious shortened URL indicators.
 
     Looks for common URL shorteners and suspicious link patterns.
 

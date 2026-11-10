@@ -1,8 +1,10 @@
 """System routes: API metadata and health checks."""
 
 from fastapi import APIRouter
+from sqlalchemy import text
 
 from app.core.config import get_settings
+from app.database.connection import engine
 from app.schemas.health import HealthResponse, RootResponse, SystemInfoResponse
 
 router = APIRouter(tags=["system"])
@@ -27,16 +29,22 @@ async def read_root() -> RootResponse:
     "/health",
     response_model=HealthResponse,
     summary="Service health check",
-    description=(
-        "Reports service availability. Database persistence is not wired up "
-        "in this phase, so it always reports `not_configured`."
-    ),
+    description="Reports service availability and database connectivity.",
 )
 async def health_check() -> HealthResponse:
     settings = get_settings()
+    try:
+        with engine.connect() as connection:
+            connection.execute(text("SELECT 1"))
+        database = "connected"
+        status_value = "healthy"
+    except Exception:
+        database = "unavailable"
+        status_value = "degraded"
+
     return HealthResponse(
-        status="healthy",
-        database="not_configured",
+        status=status_value,
+        database=database,
         service=settings.app_name,
         environment=settings.environment,
     )
@@ -55,7 +63,7 @@ async def system_info() -> SystemInfoResponse:
         app_version=settings.app_version,
         environment=settings.environment,
         api_prefix=settings.api_prefix,
-        available_modules=["system", "health"],
-        database_integration="not_configured",
-        ai_integration="not_configured",
+        available_modules=["system", "health", "auth", "detection", "history", "analytics"],
+        database_integration="sqlalchemy",
+        ai_integration="gemini_optional",
     )

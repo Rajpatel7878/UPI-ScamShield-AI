@@ -26,8 +26,7 @@ function NotificationPanel() {
         </span>
         <p className="mt-3 text-sm font-medium text-ink">No notifications</p>
         <p className="type-caption mt-1">
-          Detection alerts will appear here once the analysis engine is
-          connected.
+          Detection alerts will appear here in a future update.
         </p>
       </div>
     </div>

@@ -3,7 +3,7 @@ import { Link, Outlet, useLocation } from 'react-router-dom'
 import { BrandLogo } from '../components/common/BrandLogo.jsx'
 import { Container } from '../components/common/Container.jsx'
 import { StatusBadge } from '../components/ui/Badge.jsx'
-import { useApp } from '../context/AppContext.js'
+import { useApp } from '../context/AppContext.jsx'
 
 const STATUS_TEXT = {
   online: 'API online',

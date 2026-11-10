@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, ForeignKey, Integer, JSON, String
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, JSON, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.base import Base
@@ -21,6 +21,13 @@ class Scan(Base):
     """
 
     __tablename__ = "scans"
+
+    __table_args__ = (
+        # History and analytics always filter by user and order by time.
+        Index("ix_scans_user_created_at", "user_id", "created_at"),
+        Index("ix_scans_risk_level", "risk_level"),
+        Index("ix_scans_content_type", "content_type"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int | None] = mapped_column(

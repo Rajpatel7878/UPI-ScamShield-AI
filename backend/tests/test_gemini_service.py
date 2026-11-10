@@ -1,6 +1,7 @@
 """Tests for the Google Gemini AI service in UPI ScamShield AI."""
 
 import json
+import os
 import sys
 from unittest.mock import MagicMock, patch
 
@@ -421,7 +422,7 @@ def test_rule_based_still_works():
     result = detector.detect(content="Share OTP: 12345", content_type="sms")
     assert len(result["matched_rule_names"]) > 0
     assert result["total_score"] > 0
-    assert result["risk_level"] in ("low", "medium", "high", "critical")
+    assert result["risk_level"].lower() in ("low", "medium", "high", "critical")
 
     # Test with legitimate message
     result2 = detector.detect(content="Please pay your bill using the app", content_type="sms")

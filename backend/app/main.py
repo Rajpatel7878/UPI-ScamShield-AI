@@ -1,6 +1,7 @@
 """FastAPI application entry point."""
 
 import logging
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -8,6 +9,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api import api_router
 from app.core.config import get_settings
 from app.core.errors import register_exception_handlers
+from app.core.middleware import RequestGuardMiddleware
+from app.database.init_db import init_db
 from app.schemas.health import RootResponse
 
 logging.basicConfig(
@@ -19,6 +22,18 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    """Create missing tables and indexes once at startup.
+
+    ``create_all`` is idempotent and never deletes existing records. Schema
+    migrations for production changes belong in Alembic.
+    """
+    init_db()
+    logger.info("Database schema ready")
+    yield
+
+
 def create_application() -> FastAPI:
     """Build and configure the FastAPI application."""
     settings = get_settings()
@@ -27,21 +42,25 @@ def create_application() -> FastAPI:
         title=settings.app_name,
         version=settings.app_version,
         description=(
-            "AI-powered UPI fraud detection and digital payment security API. "
-            "Phase 1 provides the service foundation only; the detection engine "
-            "arrives in a later phase."
+            "UPI fraud detection and digital payment security API. "
+            "Detection combines explainable rules, passive URL analysis and "
+            "optional Gemini assistance. Results are heuristic risk assessments, "
+            "not proof that a message is fraudulent."
         ),
         docs_url="/docs",
         redoc_url="/redoc",
-        openapi_url=settings.api_v1_prefix + "/" + "openapi.json",
+        openapi_url=settings.api_v1_prefix + "/openapi.json",
+        lifespan=lifespan,
     )
 
+    # Added first so CORS wraps the guard and still decorates 429/413 responses.
+    application.add_middleware(RequestGuardMiddleware)
     application.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
         allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type", "Accept"],
     )
 
     register_exception_handlers(application)

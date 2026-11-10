@@ -1,1 +1,434 @@
-\"\"\"Hybrid AI risk scoring engine for UPI ScamShield AI.\n\nCombines rule-based fraud detection from Phase 10 with Gemini AI contextual\nanalysis from Phase 11 to generate one consistent, explainable risk assessment.\nWeights are initial engineering heuristics (60% rule-based, 40% AI), not scientifically\nvalidated, and are configurable in one central location.\n\"\"\"\nfrom __future__ import annotations\n\nimport logging\nfrom typing import Any\nfrom typing import Dict\nfrom typing import List\nfrom typing import Optional\nfrom typing import Tuple\n\nfrom app.services.detection.gemini_service import GeminiService, is_gemini_configured\nfrom app.services.detection.risk_scorer import RiskScorer\nfrom app.services.detection.rules import get_all_rules, RULE_NAME_MAP, SCORE_CONTRIBUTION_MAP\nfrom app.schemas.detection import (\n    GeminiIndicator,\n    GeminiAnalysisResult,\n    AIAnalysis,\n    DetectionResponse,\n)\n\n\nlogger = logging.getLogger(__name__)\n\n\n# --- Configuration ---\n\n# Initial weighted hybrid scoring approach (per Phase 12 spec)\n# These weights are engineering heuristics, not scientifically validated\nHYBRID_WEIGHTS = {\n    \"rule_based\": 0.60,  # 60% weight for rule-based score\n    \"gemini\": 0.40,  # 40% weight for AI analysis score\n}\n\n# Centralized Gemini risk-level to numeric score mapping (per Phase 12 spec)\n# These are starting values for converting Gemini's risk_level into a numeric score\nGEMINI_RISK_LEVEL_SCORES: dict[str, int] = {\n    \"low\": 15,\n    \"medium\": 45,\n    \"high\": 70,\n    \"critical\": 90,\n}\n\n# Centralized risk thresholds (per Phase 12 spec)\n# Final classification based on final combined score, not whichever source reports highest\nRISK_THRESHOLDS: dict[str, tuple[int, int]] = {\n    \"Critical\": (80, 100),\n    \"High\": (60, 79),\n    \"Medium\": (30, 59),\n    \"Low\": (0, 29),\n}\n\n\nclass HybridScorer:\n    \"\"\"Hybrid risk scoring engine combining rule-based and Gemini AI analysis.\n    \n    Responsibilities:\n    - Accept rule-based results and Gemini analysis results\n    - Evaluate availability and validity of both results\n    - Calculate a combined risk score using weighted formula\n    - Determine the final risk category\n    - Generate a unified explanation\n    - Merge duplicate indicators\n    - Generate prioritized recommendations\n    - Return a validated structured result\n    \"\"\"\n    \n    def __init__(self) -> None:\n        self._risk_scorer = RiskScorer()\n        self._gemini_service = GeminiService()\n    \n    def score(\n        self,\n        rule_score: int,\n        rule_risk_level: str,\n        rule_category: str,\n        rule_indicators: list[dict],\n        rule_recommendations: list[str],\n        gemini_result: Optional[dict] = None,\n    ) -> dict[str, Any]:\n        \"\"\"Calculate the hybrid risk score and unified analysis.\n        \n        This method handles all source availability combinations:\n        - Both sources available: weighted hybrid score\n        - Rule-based only: use rule-based score, mark as rule_based_only\n        - Gemini only: use mapped Gemini score, mark as ai_only\n        - Neither source available: safe failure response\n        \n        Args:\n            rule_score: Rule-based risk score (0-100)\n            rule_risk_level: Rule-based risk level (Low/Medium/High/Critical)\n            rule_category: Rule-based primary category\n            rule_indicators: Matched indicators from rule detector\n            rule_recommendations: Recommendations from rule detector\n            gemini_result: Optional Gemini analysis result from Phase 11\n        \n        Returns:\n            Dict with hybrid analysis result:\n                - hybrid_score: Final combined risk score (0-100, integer)\n                - risk_level: Final risk level (Low/Medium/High/Critical)\n                - category: Final primary category\n                - summary: Human-readable summary\n                - indicators: Merged indicators list\n                - recommendations: Merged recommendations list\n                - analysis_type: \"hybrid\" | \"rule_based_only\" | \"ai_only\" | \"analysis_failed\"\n                - source_status: Dict with status of each source\n        \"\"\"\n        # Handle each source availability combination\n        source_status: dict[str, str] = {\n            \"rule_based\": \"completed\",\n            \"gemini\": \"unavailable\",\n        }\n        \n        # Case 1: Both sources available\n        if gemini_result is not None:\n            source_status[\"gemini\"] = gemini_result.get(\"status\", \"unavailable\")\n            \n            if source_status[\"gemini\"] == \"completed\" and gemini_result.get(\"result\"):\n                return self._both_sources_available(\n                    rule_score=rule_score,\n                    rule_risk_level=rule_risk_level,\n                    rule_category=rule_category,\n                    rule_indicators=rule_indicators,\n                    rule_recommendations=rule_recommendations,\n                    gemini_result=gemini_result,\n                )\n            else:\n                # Gemini was attempted but failed/unavailable\n                # Fall back to rule-based only\n                source_status[\"gemini\"] = \"unavailable\"\n        \n        # Case 2: Rule-based only (Gemini unavailable or not configured)\n        if source_status[\"gemini\"] == \"unavailable\":\n            return self._rule_based_only(\n                rule_score=rule_score,\n                rule_risk_level=rule_risk_level,\n                rule_category=rule_category,\n                rule_indicators=rule_indicators,\n                rule_recommendations=rule_recommendations,\n            )\n        \n        # Case 3: Neither source available\n        return self._neither_source_available()\n    \n    def _both_sources_available(\n        self,\n        rule_score: int,\n        rule_risk_level: str,\n        rule_category: str,\n        rule_indicators: list[dict],\n        rule_recommendations: list[str],\n        gemini_result: dict,\n    ) -> dict[str, Any]:\n        \"\"\"Calculate hybrid score when both sources are available.\"\"\"\n        # Extract Gemini result components\n        gemini_result_obj = gemini_result[\"result\"]\n        \n        # Get AI score: use validated numeric score if available, otherwise map from risk level\n        ai_score = self._get_ai_score(gemini_result_obj)\n        \n        # Calculate weighted hybrid score\n        # Hybrid Score = (Rule Score × 0.60) + (AI Score × 0.40)\n        raw_hybrid = (rule_score * HYBRID_WEIGHTS[\"rule_based\"]) + (ai_score * HYBRID_WEIGHTS[\"gemini\"])\n        \n        # Round to integer between 0 and 100\n        hybrid_score = max(0, min(100, round(raw_hybrid)))\n        \n        # Determine final risk classification based on combined score\n        risk_level = self._classify_risk_level(hybrid_score)\n        \n        # Determine final category (prefer rule-based category, fallback to Gemini)\n        category = rule_category\n        if gemini_result_obj and gemini_result_obj.category:\n            # Only override if Gemini has a meaningful category\n            category = gemini_result_obj.category\n        \n        # Merge indicators from both sources\n        merged_indicators = self._merge_indicators(\n            rule_indicators=rule_indicators,\n            gemini_indicators=gemini_result_obj.indicators if gemini_result_obj else [],\n        )\n        \n        # Merge recommendations from both sources\n        merged_recommendations = self._merge_recommendations(\n            rule_recommendations=rule_recommendations,\n            gemini_recommendations=gemini_result_obj.recommendations if gemini_result_obj else [],\n        )\n        \n        # Build summary\n        summary = self._build_summary(hybrid_score, risk_level, category, len(merged_indicators))\n        \n        return {\n            \"hybrid_score\": hybrid_score,\n            \"risk_level\": risk_level,\n            \"category\": category,\n            \"summary\": summary,\n            \"indicators\": merged_indicators,\n            \"recommendations\": merged_recommendations,\n            \"analysis_type\": \"hybrid\",\n            \"source_status\": {\n                \"rule_based\": \"completed\",\n                \"gemini\": \"completed\",\n            },\n        }\n    \n    def _rule_based_only(\n        self,\n        rule_score: int,\n        rule_risk_level: str,\n        rule_category: str,\n        rule_indicators: list[dict],\n        rule_recommendations: list[str],\n    ) -> dict[str, Any]:\n        \"\"\"Handle case where only rule-based analysis is available.\"\"\"\n        # Use rule-based score directly\n        risk_level = rule_risk_level\n        category = rule_category\n        \n        # Classify risk level if not already in proper format\n        if risk_level and risk_level.lower() in [\"low\", \"medium\", \"high\", \"critical\"]:\n            risk_level = risk_level.capitalize()\n        \n        # Merge indicators (just rule-based ones)\n        merged_indicators = rule_indicators\n        \n        # Merge recommendations (just rule-based ones)\n        merged_recommendations = rule_recommendations\n        \n        # Build summary\n        summary = self._build_summary(rule_score, risk_level, category, len(merged_indicators))\n        \n        return {\n            \"hybrid_score\": rule_score,\n            \"risk_level\": risk_level,\n            \"category\": category,\n            \"summary\": summary,\n            \"indicators\": merged_indicators,\n            \"recommendations\": merged_recommendations,\n            \"analysis_type\": \"rule_based_only\",\n            \"source_status\": {\n                \"rule_based\": \"completed\",\n                \"gemini\": \"unavailable\",\n            },\n        }\n    \n    def _ai_only(self, gemini_score: int, gemini_risk_level: str, gemini_category: str, gemini_indicators: list, gemini_recommendations: list) -> dict[str, Any]:\n        \"\"\"Handle case where only Gemini analysis is available.\"\"\"\n        risk_level = gemini_risk_level.capitalize() if gemini_risk_level else \"Low\"\n        category = gemini_category or \"General Scam\"\n        \n        merged_indicators = gemini_indicators\n        merged_recommendations = gemini_recommendations\n        \n        summary = self._build_summary(gemini_score, risk_level, category, len(merged_indicators))\n        \n        return {\n            \"hybrid_score\": gemini_score,\n            \"risk_level\": risk_level,\n            \"category\": category,\n            \"summary\": summary,\n            \"indicators\": merged_indicators,\n            \"recommendations\": merged_recommendations,\n            \"analysis_type\": \"ai_only\",\n            \"source_status\": {\n                \"rule_based\": \"unavailable\",\n                \"gemini\": \"completed\",\n            },\n        }\n    \n    def _neither_source_available(self) -> dict[str, Any]:\n        \"\"\"Handle case where neither source has valid results.\"\"\"\n        # Do not fabricate a score\n        # Return a safe analysis failure response\n        return {\n            \"hybrid_score\": 0,\n            \"risk_level\": \"Low\",\n            \"category\": \"Analysis Unavailable\",\n            \"summary\": \"Analysis could not be completed. No detection sources available.\",\n            \"indicators\": [],\n            \"recommendations\": [\n                \"Please try again later or contact your bank directly.\"\n            ],\n            \"analysis_type\": \"analysis_failed\",\n            \"source_status\": {\n                \"rule_based\": \"unavailable\",\n                \"gemini\": \"unavailable\",\n            },\n        }\n    \n    def _get_ai_score(self, gemini_result_obj) -> int:\n        \"\"\"Extract or compute a numeric AI score from Gemini result.\"\"\"\n        # If Gemini returns a validated numeric score, use it (if scale is consistent)\n        # Per Phase 12 spec: only reuse if meaning and scale are explicitly defined\n        # For now, map from risk level since Gemini returns risk_level not numeric score\n        if gemini_result_obj and hasattr(gemini_result_obj, \"risk_level\"):\n            risk_level = gemini_result_obj.risk_level\n            if risk_level in GEMINI_RISK_LEVEL_SCORES:\n                return GEMINI_RISK_LEVEL_SCORES[risk_level]\n        \n        # Fallback: map risk level from the GeminiAnalysisResult schema\n        if gemini_result_obj and gemini_result_obj.risk_level:\n            risk_level = gemini_result_obj.risk_level.lower()\n            if risk_level in GEMINI_RISK_LEVEL_SCORES:\n                return GEMINI_RISK_LEVEL_SCORES[risk_level]\n        \n        # Default fallback score\n        return 45  # Medium default\n    \n    def _classify_risk_level(self, score: int) -> str:\n        \"\"\"Classify a numeric score into a risk level band.\"\"\"\n        for level in (\"Critical\", \"High\", \"Medium\", \"Low\"):\n            min_score, max_score = RISK_THRESHOLDS[level]\n            if min_score <= score <= max_score:\n                return level\n        return \"Low\"\n    \n    def _merge_indicators(\n        self,\n        rule_indicators: list[dict],\n        gemini_indicators: list[GeminiIndicator],\n    ) -> list[dict]:\n        \"\"\"Merge indicators from rule-based and Gemini systems.\n        \n        Requirements (per Phase 12 spec):\n        - Avoid duplicate indicators\n        - Preserve rule IDs when available\n        - Preserve source information (rule_based or gemini)\n        - Merge equivalent findings\n        - Preserve meaningful severity\n        - Do not invent evidence\n        - Do not let unsupported Gemini claims override actual rule-based findings\n        \"\"\"\n        merged: list[dict] = []\n        seen: set[str] = set()\n        \n        # First, add all rule-based indicators\n        for rule_ind in rule_indicators:\n            # Create a key for deduplication\n            key = rule_ind.get(\"name\", \"\")\n            if key not in seen:\n                seen.add(key)\n                merged.append({\n                    \"rule_id\": rule_ind.get(\"rule_id\"),\n                    \"name\": rule_ind.get(\"name\"),\n                    \"category\": rule_ind.get(\"category\", \"\"),\n                    \"severity\": rule_ind.get(\"severity\"),\n                    \"description\": rule_ind.get(\"description\"),\n                    \"source\": \"rule_based\",\n                })\n        \n        # Then, add Gemini indicators, avoiding duplicates\n        for gemini_ind in gemini_indicators:\n            key = gemini_ind.name\n            if key not in seen:\n                seen.add(key)\n                merged.append({\n                    \"rule_id\": None,\n                    \"name\": gemini_ind.name,\n                    \"category\": gemini_ind.category,\n                    \"severity\": gemini_ind.severity,\n                    \"description\": gemini_ind.explanation,\n                    \"source\": \"gemini\",\n                })\n        \n        return merged\n    \n    def _merge_recommendations(\n        self,\n        rule_recommendations: list[str],\n        gemini_recommendations: list[str],\n    ) -> list[str]:\n        \"\"\"Merge recommendations from both sources.\n        \n        Requirements (per Phase 12 spec):\n        - Remove duplicates\n        - Prioritize immediate security actions\n        - Keep recommendations short and actionable\n        - Avoid contradictory advice\n        - Include a general safety recommendation when relevant\n        - Never instruct users to share OTPs, UPI PINs, passwords, or bank credentials\n        \"\"\"\n        merged: list[str] = []\n        seen: set[str] = set()\n        \n        # Add rule-based recommendations first (prioritize immediate security actions)\n        for rec in rule_recommendations:\n            rec_lower = rec.lower().strip()\n            if rec_lower not in seen and not any(\n                forbidden in rec_lower\n                for forbidden in [\"share your otp\", \"share your pin\", \"share your password\", \"enter your pin\"]\n            ):\n                seen.add(rec_lower)\n                merged.append(rec)\n        \n        # Add Gemini recommendations, avoiding duplicates\n        for rec in gemini_recommendations:\n            rec_lower = rec.lower().strip()\n            if rec_lower not in seen and not any(\n                forbidden in rec_lower\n                for forbidden in [\"share your otp\", \"share your pin\", \"share your password\", \"enter your pin\"]\n            ):\n                seen.add(rec_lower)\n                merged.append(rec)\n        \n        # Ensure a general safety recommendation is included if no indicators matched\n        if not merged:\n            merged = [\n                \"Do not share your OTP or UPI PIN with anyone.\",\n                \"Do not approve an unknown payment request.\",\n                \"Verify the request through your bank's official channel.\",\n            ]\n        \n        return merged[:10]  # Cap at 10 recommendations\n    \n    def _build_summary(\n        self,\n        score: int,\n        risk_level: str,\n        category: str,\n        indicator_count: int,\n    ) -> str:\n        \"\"\"Build a human-readable summary of the analysis.\"\"\"\n        if indicator_count == 0:\n            return f\"The message does not contain indicators commonly associated with UPI scams. (Risk score: {score}, {risk_level.lower()})\"\n        \n        if indicator_count == 1:\n            return f\"The message contains 1 indicator commonly associated with {category.lower()}. (Risk score: {score}, {risk_level.lower()})\"\n        \n        return f\"The message contains {indicator_count} indicators commonly associated with multiple fraud categories. (Risk score: {score}, {risk_level.lower()})\"
+"""Hybrid AI risk scoring engine for UPI ScamShield AI.
+
+Combines rule-based fraud detection from Phase 10 with Gemini AI contextual
+analysis from Phase 11 to generate one consistent, explainable risk assessment.
+Weights are initial engineering heuristics (60% rule-based, 40% AI), not scientifically
+validated, and are configurable in one central location.
+"""
+from __future__ import annotations
+
+import logging
+from typing import Any
+from typing import Dict
+from typing import List
+from typing import Optional
+from typing import Tuple
+
+from app.services.detection.gemini_service import GeminiService, is_gemini_configured
+from app.services.detection.risk_scorer import RiskScorer
+from app.services.detection.rules import get_all_rules, RULE_NAME_MAP, SCORE_CONTRIBUTION_MAP
+from app.schemas.detection import (
+    GeminiIndicator,
+    GeminiAnalysisResult,
+    AIAnalysis,
+    DetectionResponse,
+)
+
+
+logger = logging.getLogger(__name__)
+
+
+# --- Configuration ---
+
+# Initial weighted hybrid scoring approach (per Phase 12 spec)
+# These weights are engineering heuristics, not scientifically validated
+HYBRID_WEIGHTS = {
+    "rule_based": 0.60,  # 60% weight for rule-based score
+    "gemini": 0.40,  # 40% weight for AI analysis score
+}
+
+# Centralized Gemini risk-level to numeric score mapping (per Phase 12 spec)
+# These are starting values for converting Gemini's risk_level into a numeric score
+GEMINI_RISK_LEVEL_SCORES: dict[str, int] = {
+    "low": 15,
+    "medium": 45,
+    "high": 70,
+    "critical": 90,
+}
+
+# Centralized risk thresholds (per Phase 12 spec)
+# Final classification based on final combined score, not whichever source reports highest
+RISK_THRESHOLDS: dict[str, tuple[int, int]] = {
+    "Critical": (80, 100),
+    "High": (60, 79),
+    "Medium": (30, 59),
+    "Low": (0, 29),
+}
+
+
+class HybridScorer:
+    """Hybrid risk scoring engine combining rule-based and Gemini AI analysis.
+
+    Responsibilities:
+    - Accept rule-based results and Gemini analysis results
+    - Evaluate availability and validity of both results
+    - Calculate a combined risk score using weighted formula
+    - Determine the final risk category
+    - Generate a unified explanation
+    - Merge duplicate indicators
+    - Generate prioritized recommendations
+    - Return a validated structured result
+    """
+
+    def __init__(self) -> None:
+        self._risk_scorer = RiskScorer()
+        self._gemini_service = GeminiService()
+
+    def score(
+        self,
+        rule_score: int,
+        rule_risk_level: str,
+        rule_category: str,
+        rule_indicators: list[dict],
+        rule_recommendations: list[str],
+        gemini_result: Optional[dict] = None,
+    ) -> dict[str, Any]:
+        """Calculate the hybrid risk score and unified analysis.
+
+        This method handles all source availability combinations:
+        - Both sources available: weighted hybrid score
+        - Rule-based only: use rule-based score, mark as rule_based_only
+        - Gemini only: use mapped Gemini score, mark as ai_only
+        - Neither source available: safe failure response
+
+        Args:
+            rule_score: Rule-based risk score (0-100)
+            rule_risk_level: Rule-based risk level (Low/Medium/High/Critical)
+            rule_category: Rule-based primary category
+            rule_indicators: Matched indicators from rule detector
+            rule_recommendations: Recommendations from rule detector
+            gemini_result: Optional Gemini analysis result from Phase 11
+
+        Returns:
+            Dict with hybrid analysis result:
+                - hybrid_score: Final combined risk score (0-100, integer)
+                - risk_level: Final risk level (Low/Medium/High/Critical)
+                - category: Final primary category
+                - summary: Human-readable summary
+                - indicators: Merged indicators list
+                - recommendations: Merged recommendations list
+                - analysis_type: "hybrid" | "rule_based_only" | "ai_only" | "analysis_failed"
+                - source_status: Dict with status of each source
+        """
+        # Handle each source availability combination
+        source_status: dict[str, str] = {
+            "rule_based": "completed",
+            "gemini": "unavailable",
+        }
+
+        # Case 1: Both sources available
+        if gemini_result is not None:
+            source_status["gemini"] = gemini_result.get("status", "unavailable")
+
+            if source_status["gemini"] == "completed" and gemini_result.get("result"):
+                return self._both_sources_available(
+                    rule_score=rule_score,
+                    rule_risk_level=rule_risk_level,
+                    rule_category=rule_category,
+                    rule_indicators=rule_indicators,
+                    rule_recommendations=rule_recommendations,
+                    gemini_result=gemini_result,
+                )
+            else:
+                # Gemini was attempted but failed/unavailable
+                # Fall back to rule-based only
+                source_status["gemini"] = "unavailable"
+
+        # Case 2: Rule-based only (Gemini unavailable or not configured)
+        if source_status["gemini"] == "unavailable":
+            return self._rule_based_only(
+                rule_score=rule_score,
+                rule_risk_level=rule_risk_level,
+                rule_category=rule_category,
+                rule_indicators=rule_indicators,
+                rule_recommendations=rule_recommendations,
+            )
+
+        # Case 3: Neither source available
+        return self._neither_source_available()
+
+    def _both_sources_available(
+        self,
+        rule_score: int,
+        rule_risk_level: str,
+        rule_category: str,
+        rule_indicators: list[dict],
+        rule_recommendations: list[str],
+        gemini_result: dict,
+    ) -> dict[str, Any]:
+        """Calculate hybrid score when both sources are available."""
+        # Extract Gemini result components
+        gemini_result_obj = gemini_result["result"]
+
+        # Get AI score: use validated numeric score if available, otherwise map from risk level
+        ai_score = self._get_ai_score(gemini_result_obj)
+
+        # Calculate weighted hybrid score
+        # Hybrid Score = (Rule Score Ã 0.60) + (AI Score Ã 0.40)
+        raw_hybrid = (rule_score * HYBRID_WEIGHTS["rule_based"]) + (ai_score * HYBRID_WEIGHTS["gemini"])
+
+        # Round to integer between 0 and 100
+        hybrid_score = max(0, min(100, round(raw_hybrid)))
+
+        # Determine final risk classification based on combined score
+        risk_level = self._classify_risk_level(hybrid_score)
+
+        # Determine final category (prefer rule-based category, fallback to Gemini)
+        category = rule_category
+        if gemini_result_obj and gemini_result_obj.category:
+            # Only override if Gemini has a meaningful category
+            category = gemini_result_obj.category
+
+        # Merge indicators from both sources
+        merged_indicators = self._merge_indicators(
+            rule_indicators=rule_indicators,
+            gemini_indicators=gemini_result_obj.indicators if gemini_result_obj else [],
+        )
+
+        # Merge recommendations from both sources
+        merged_recommendations = self._merge_recommendations(
+            rule_recommendations=rule_recommendations,
+            gemini_recommendations=gemini_result_obj.recommendations if gemini_result_obj else [],
+        )
+
+        # Build summary
+        summary = self._build_summary(hybrid_score, risk_level, category, len(merged_indicators))
+
+        return {
+            "hybrid_score": hybrid_score,
+            "risk_level": risk_level,
+            "category": category,
+            "summary": summary,
+            "indicators": merged_indicators,
+            "recommendations": merged_recommendations,
+            "analysis_type": "hybrid",
+            "source_status": {
+                "rule_based": "completed",
+                "gemini": "completed",
+            },
+        }
+
+    def _rule_based_only(
+        self,
+        rule_score: int,
+        rule_risk_level: str,
+        rule_category: str,
+        rule_indicators: list[dict],
+        rule_recommendations: list[str],
+    ) -> dict[str, Any]:
+        """Handle case where only rule-based analysis is available."""
+        # Use rule-based score directly
+        risk_level = rule_risk_level
+        category = rule_category
+
+        # Classify risk level if not already in proper format
+        if risk_level and risk_level.lower() in ["low", "medium", "high", "critical"]:
+            risk_level = risk_level.capitalize()
+
+        # Merge indicators (just rule-based ones)
+        merged_indicators = rule_indicators
+
+        # Merge recommendations (just rule-based ones)
+        merged_recommendations = rule_recommendations
+
+        # Build summary
+        summary = self._build_summary(rule_score, risk_level, category, len(merged_indicators))
+
+        return {
+            "hybrid_score": rule_score,
+            "risk_level": risk_level,
+            "category": category,
+            "summary": summary,
+            "indicators": merged_indicators,
+            "recommendations": merged_recommendations,
+            "analysis_type": "rule_based_only",
+            "source_status": {
+                "rule_based": "completed",
+                "gemini": "unavailable",
+            },
+        }
+
+    def _ai_only(self, gemini_score: int, gemini_risk_level: str, gemini_category: str, gemini_indicators: list, gemini_recommendations: list) -> dict[str, Any]:
+        """Handle case where only Gemini analysis is available."""
+        risk_level = gemini_risk_level.capitalize() if gemini_risk_level else "Low"
+        category = gemini_category or "General Scam"
+
+        merged_indicators = gemini_indicators
+        merged_recommendations = gemini_recommendations
+
+        summary = self._build_summary(gemini_score, risk_level, category, len(merged_indicators))
+
+        return {
+            "hybrid_score": gemini_score,
+            "risk_level": risk_level,
+            "category": category,
+            "summary": summary,
+            "indicators": merged_indicators,
+            "recommendations": merged_recommendations,
+            "analysis_type": "ai_only",
+            "source_status": {
+                "rule_based": "unavailable",
+                "gemini": "completed",
+            },
+        }
+
+    def _neither_source_available(self) -> dict[str, Any]:
+        """Handle case where neither source has valid results."""
+        # Do not fabricate a score
+        # Return a safe analysis failure response
+        return {
+            "hybrid_score": 0,
+            "risk_level": "Low",
+            "category": "Analysis Unavailable",
+            "summary": "Analysis could not be completed. No detection sources available.",
+            "indicators": [],
+            "recommendations": [
+                "Please try again later or contact your bank directly."
+            ],
+            "analysis_type": "analysis_failed",
+            "source_status": {
+                "rule_based": "unavailable",
+                "gemini": "unavailable",
+            },
+        }
+
+    def _get_ai_score(self, gemini_result_obj) -> int:
+        """Extract or compute a numeric AI score from Gemini result."""
+        # If Gemini returns a validated numeric score, use it (if scale is consistent)
+        # Per Phase 12 spec: only reuse if meaning and scale are explicitly defined
+        # For now, map from risk level since Gemini returns risk_level not numeric score
+        if gemini_result_obj and hasattr(gemini_result_obj, "risk_level"):
+            risk_level = gemini_result_obj.risk_level
+            if risk_level in GEMINI_RISK_LEVEL_SCORES:
+                return GEMINI_RISK_LEVEL_SCORES[risk_level]
+
+        # Fallback: map risk level from the GeminiAnalysisResult schema
+        if gemini_result_obj and gemini_result_obj.risk_level:
+            risk_level = gemini_result_obj.risk_level.lower()
+            if risk_level in GEMINI_RISK_LEVEL_SCORES:
+                return GEMINI_RISK_LEVEL_SCORES[risk_level]
+
+        # Default fallback score
+        return 45  # Medium default
+
+    def _classify_risk_level(self, score: int) -> str:
+        """Classify a numeric score into a risk level band."""
+        for level in ("Critical", "High", "Medium", "Low"):
+            min_score, max_score = RISK_THRESHOLDS[level]
+            if min_score <= score <= max_score:
+                return level
+        return "Low"
+
+    def _merge_indicators(
+        self,
+        rule_indicators: list[dict],
+        gemini_indicators: list[GeminiIndicator],
+    ) -> list[dict]:
+        """Merge indicators from rule-based and Gemini systems.
+
+        Requirements (per Phase 12 spec):
+        - Avoid duplicate indicators
+        - Preserve rule IDs when available
+        - Preserve source information (rule_based or gemini)
+        - Merge equivalent findings
+        - Preserve meaningful severity
+        - Do not invent evidence
+        - Do not let unsupported Gemini claims override actual rule-based findings
+        """
+        merged: list[dict] = []
+        seen: set[str] = set()
+
+        # First, add all rule-based indicators
+        for rule_ind in rule_indicators:
+            # Create a key for deduplication
+            key = rule_ind.get("name", "")
+            if key not in seen:
+                seen.add(key)
+                merged.append({
+                    "rule_id": rule_ind.get("rule_id"),
+                    "name": rule_ind.get("name"),
+                    "category": rule_ind.get("category", ""),
+                    "severity": rule_ind.get("severity"),
+                    "description": rule_ind.get("description"),
+                    "source": "rule_based",
+                })
+
+        # Then, add Gemini indicators, avoiding duplicates
+        for gemini_ind in gemini_indicators:
+            key = gemini_ind.name
+            if key not in seen:
+                seen.add(key)
+                merged.append({
+                    "rule_id": None,
+                    "name": gemini_ind.name,
+                    "category": getattr(gemini_ind, "category", ""),
+                    "severity": gemini_ind.severity,
+                    "description": gemini_ind.explanation,
+                    "source": "gemini",
+                })
+
+        return merged
+
+    def _merge_recommendations(
+        self,
+        rule_recommendations: list[str],
+        gemini_recommendations: list[str],
+    ) -> list[str]:
+        """Merge recommendations from both sources.
+
+        Requirements (per Phase 12 spec):
+        - Remove duplicates
+        - Prioritize immediate security actions
+        - Keep recommendations short and actionable
+        - Avoid contradictory advice
+        - Include a general safety recommendation when relevant
+        - Never instruct users to share OTPs, UPI PINs, passwords, or bank credentials
+        """
+        merged: list[str] = []
+        seen: set[str] = set()
+
+        # Add rule-based recommendations first (prioritize immediate security actions)
+        for rec in rule_recommendations:
+            rec_lower = rec.lower().strip()
+            if rec_lower not in seen and not any(
+                forbidden in rec_lower
+                for forbidden in ["share your otp", "share your pin", "share your password", "enter your pin"]
+            ):
+                seen.add(rec_lower)
+                merged.append(rec)
+
+        # Add Gemini recommendations, avoiding duplicates
+        for rec in gemini_recommendations:
+            rec_lower = rec.lower().strip()
+            if rec_lower not in seen and not any(
+                forbidden in rec_lower
+                for forbidden in ["share your otp", "share your pin", "share your password", "enter your pin"]
+            ):
+                seen.add(rec_lower)
+                merged.append(rec)
+
+        # Ensure a general safety recommendation is included if no indicators matched
+        if not merged:
+            merged = [
+                "Do not share your OTP or UPI PIN with anyone.",
+                "Do not approve an unknown payment request.",
+                "Verify the request through your bank's official channel.",
+            ]
+
+        return merged[:10]  # Cap at 10 recommendations
+
+    def _build_summary(
+        self,
+        score: int,
+        risk_level: str,
+        category: str,
+        indicator_count: int,
+    ) -> str:
+        """Build a human-readable summary of the analysis."""
+        if indicator_count == 0:
+            return f"The message does not contain indicators commonly associated with UPI scams. (Risk score: {score}, {risk_level.lower()})"
+
+        if indicator_count == 1:
+            return f"The message contains 1 indicator commonly associated with {category.lower()}. (Risk score: {score}, {risk_level.lower()})"
+
+        return f"The message contains {indicator_count} indicators commonly associated with multiple fraud categories. (Risk score: {score}, {risk_level.lower()})"

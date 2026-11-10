@@ -1,18 +1,41 @@
-import { FileText, LogIn, ShieldCheck, UserPlus } from 'lucide-react'
-import { Route, Routes, Redirect } from 'react-router-dom'
+import { lazy, Suspense } from 'react'
+import { Navigate, Route, Routes } from 'react-router-dom'
+
 import { AppLayout } from '../components/layout/AppLayout.jsx'
+import { ProtectedRoute } from '../components/routing/ProtectedRoute.jsx'
 import MainLayout from '../layouts/MainLayout.jsx'
-import Analytics from '../pages/Analytics.jsx'
-import Awareness from '../pages/Awareness.jsx'
-import Dashboard from '../pages/Dashboard.jsx'
-import DesignSystem from '../pages/DesignSystem.jsx'
-import Detection from '../pages/Detection.jsx'
-import History from '../pages/History.jsx'
-import Home from '../pages/Home.jsx'
 import Landing from '../pages/Landing.jsx'
-import NotFound from '../pages/NotFound.jsx'
-import Settings from '../pages/Settings.jsx'
-import { ProtectedRoute } from '../components/routing/ProtectedRoute.js'
+
+// Internal pages are split into their own chunks. The landing page stays eager
+// because it is the first route most visitors load.
+const Analytics = lazy(() => import('../pages/Analytics.jsx'))
+const AuthPage = lazy(() => import('../pages/AuthPage.jsx'))
+const Awareness = lazy(() => import('../pages/Awareness.jsx'))
+const Dashboard = lazy(() => import('../pages/Dashboard.jsx'))
+const Detection = lazy(() => import('../pages/Detection.jsx'))
+const History = lazy(() => import('../pages/History.jsx'))
+const NotFound = lazy(() => import('../pages/NotFound.jsx'))
+const Settings = lazy(() => import('../pages/Settings.jsx'))
+
+function RouteFallback() {
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="flex min-h-64 items-center justify-center rounded-card border border-white/8 bg-navy-800 p-8"
+    >
+      <span className="text-sm text-slate-400">Loading page…</span>
+    </div>
+  )
+}
+
+function page(element) {
+  return <Suspense fallback={<RouteFallback />}>{element}</Suspense>
+}
+
+function protectedPage(element) {
+  return <ProtectedRoute>{page(element)}</ProtectedRoute>
+}
 
 export function AppRoutes() {
   return (
@@ -20,55 +43,22 @@ export function AppRoutes() {
       <Route path="/" element={<Landing />} />
 
       <Route element={<AppLayout />}>
-
-        {/* Public routes - always accessible */}
-
-        <Route path="/login" element={<PlaceholderPage />} />
-        <Route path="/register" element={<PlaceholderPage />} />
-        <Route path="/privacy" element={<PlaceholderPage />} />
-        <Route path="/terms" element={<PlaceholderPage />} />
-
-        {/* Protected routes - require authentication */}
-        <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute />} />
-        <Route path="/detect" element={<ProtectedRoute><Detection /></ProtectedRoute />} />
-        <Route path="/history" element={<ProtectedRoute><History /></ProtectedRoute />} />
-        <Route path="/analytics" element={<ProtectedRoute><Analytics /></ProtectedRoute />} />
-        <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute />} />
-
+        <Route path="/dashboard" element={protectedPage(<Dashboard />)} />
+        <Route path="/detect" element={protectedPage(<Detection />)} />
+        <Route path="/history" element={protectedPage(<History />)} />
+        <Route path="/analytics" element={protectedPage(<Analytics />)} />
+        <Route path="/awareness" element={page(<Awareness />)} />
+        <Route path="/settings" element={protectedPage(<Settings />)} />
       </Route>
 
-      <Route element={<MainLayout()>}>
-        <Route path="/status" element={<Home />} />
-        <Route path="/design-system" element={<DesignSystem />} />
-
-        {/* Login/Register placeholders within main layout */}
-        <Route
-          path="/login"
-          element={
-            <PlaceholderPage
-              eyebrow="Accounts"
-              title="Login is not available yet"
-              description="Authentication, saved scans, and scan history are planned for a later phase."
-              icon={LogIn}
-              note="No credentials are collected on this page. It exists so the navigation is honest about what is available today."
-            />
-          }
-        />
-        <Route
-          path="/register"
-          element={
-            <PlaceholderPage
-              eyebrow="Accounts"
-              title="Registration is not available yet"
-              description="Account creation will ship alongside the authentication phase."
-              icon={UserPlus}
-              note="No sign-up form is rendered and no personal data is collected. The detection workspace and accounts are not implemented in this build."
-            />
-          }
-        />
+      <Route element={<MainLayout />}>
+        <Route path="/login" element={page(<AuthPage mode="login" />)} />
+        <Route path="/register" element={page(<AuthPage mode="register" />)} />
+        <Route path="/home" element={<Navigate to="/dashboard" replace />} />
+        <Route path="*" element={page(<NotFound />)} />
       </Route>
-
-      <Route path="*" element={<NotFound />} />
     </Routes>
   )
 }
+
+export default AppRoutes

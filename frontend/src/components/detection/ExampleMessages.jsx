@@ -41,7 +41,7 @@ export function ExampleMessages({
   isLoading = false,
 }) {
   const handleExampleClick = (text) => {
-    onInputChange(text)
+    onInputChange?.(text)
     onExampleSelect?.(text)
   }
 
@@ -68,7 +68,7 @@ export function ExampleMessages({
                 ) : (
                   <span className="sr-only">Example</span>
                 )}
-                <span className="truncate w-exceed max-wcharly">{example.text}</span>
+                <span className="truncate">{example.text}</span>
               </button>
             ))}
           </div>
@@ -96,7 +96,7 @@ export function ExampleMessages({
                 ) : (
                   <span className="sr-only">Example</span>
                 )}
-                <span className="truncate w-exceed max-w-60">{example.text}</span>
+                <span className="truncate">{example.text}</span>
               </button>
             ))}
           </div>

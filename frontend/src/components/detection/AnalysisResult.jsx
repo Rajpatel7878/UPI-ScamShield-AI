@@ -1,81 +1,60 @@
-import { ShieldCheck, AlertCircle } from 'lucide-react'
+import { AlertCircle, ShieldCheck, Sparkles } from 'lucide-react'
 import { cn } from '../../utils/cn.js'
 
-/** Risk severity color mapping. */
-const SEVERITY_COLORS = {
-  low: 'brand',
-  medium: 'emerald',
-  high: 'amber',
-  critical: 'danger',
-}
-
-/** Risk severity badge colors. */
-const SEVERITY_BADGES = {
+const SEVERITY_STYLES = {
   low: 'bg-brand-500/10 text-brand-300',
   medium: 'bg-emerald-500/10 text-emerald-400',
   high: 'bg-amber-500/10 text-amber-400',
   critical: 'bg-danger-500/10 text-danger-400',
 }
 
-/**
- * Result shape supplied by the backend.
- * Used for type safety when the real analysis engine is integrated.
- */
-/**
- * @typedef {{ riskScore: number, severity: 'low' | 'medium' | 'high' | 'critical', category: string, summary: string, indicators: string[], recommendedActions: string[], safetyWarning: string }} AnalysisResult
- */
+const SEVERITY_BARS = {
+  low: 'bg-brand-400',
+  medium: 'bg-emerald-400',
+  high: 'bg-amber-400',
+  critical: 'bg-danger-500',
+}
 
-/**
- * @typedef {{ result?: AnalysisResult, hasResult: boolean, onDismiss: () => void }} Props
- */
-
-/** Format risk score with visual indicator. */
-function RiskScore(score) {
-  const percent = Math.min(Math.max(score, 0), 100)
+function RiskScore({ score, severity }) {
+  const percent = Math.min(Math.max(Number(score) || 0, 0), 100)
   return (
-    <div className="flex items-baseline gap-2">
-      <span className="type-caption font-medium">Risk Score: {score}/100</span>
-      <span>
+    <div>
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="type-field-label">Risk score</span>
+        <span className="font-mono text-sm font-semibold text-ink">{percent}/100</span>
+      </div>
+      <div
+        className="mt-2 h-2 w-full overflow-hidden rounded-full bg-navy-700"
+        role="img"
+        aria-label={`Risk score ${percent} out of 100`}
+      >
         <div
-          className="w-24 h-1.5 rounded-full bg-navy-700 overflow-hidden"
+          className={cn('h-full rounded-full transition-all duration-500', SEVERITY_BARS[severity] || SEVERITY_BARS.low)}
           style={{ width: `${percent}%` }}
-        >
-          <div
-            className={cn(
-              "h-full rounded-full",
-              SEVERITY_COLORS['critical'] === 'critical'
-                ? 'bg-danger-500'
-                : SEVERITY_COLORS['critical'] === 'high'
-                  ? 'bg-amber-500'
-                  : SEVERITY_COLORS['critical'] === 'medium'
-                    ? 'bg-emerald-500'
-                    : 'bg-brand-500',
-            )}
-          />
-        </div>
-      </span>
+        />
+      </div>
     </div>
   )
 }
 
-/** Severity badge. */
-function SeverityBadge(severity) {
+function SeverityBadge({ severity }) {
+  const value = String(severity || 'low').toLowerCase()
   return (
-    <span
-      className={cn(
-        'inline-flex items-center rounded-full px-2 py-1 text-xs font-medium',
-        SEVERITY_BADGES[severity],
-      )}
-    >
-      {severity}
+    <span className={cn('inline-flex items-center rounded-full px-2 py-1 text-xs font-medium capitalize', SEVERITY_STYLES[value] || SEVERITY_STYLES.low)}>
+      {value}
     </span>
   )
+}
+
+function indicatorText(indicator) {
+  if (typeof indicator === 'string') return { name: indicator }
+  return indicator || {}
 }
 
 export function AnalysisResult({ result, hasResult, onDismiss }) {
   if (!hasResult || !result) {
     return (
-      <div className="pt-6 text-center">
+      <div className="rounded-card border border-dashed border-white/10 bg-navy-900/30 p-6 text-center">
         <p className="type-body text-slate-500">
           Your analysis results will appear here.
         </p>
@@ -83,49 +62,92 @@ export function AnalysisResult({ result, hasResult, onDismiss }) {
     )
   }
 
-  const { riskScore, severity, category, summary, indicators, recommendedActions, safetyWarning } = result
+  const {
+    riskScore,
+    severity,
+    category,
+    summary,
+    indicators = [],
+    recommendedActions = [],
+    safetyWarning,
+    analysisType,
+    aiStatus,
+  } = result
 
   return (
-    <div className="space-y-6">
-      {/* Risk score header */}
-      <div className="grid grid-cols-2 gap-4">
-        <RiskScore score={riskScore} />
-        <SeverityBadge severity={severity} />
+    <section
+      aria-labelledby="analysis-result-heading"
+      className="rounded-card border border-white/10 bg-navy-800 p-5 shadow-card sm:p-6"
+    >
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="type-label">Analysis complete</p>
+          <h2 id="analysis-result-heading" className="type-h2 mt-1">
+            {category}
+          </h2>
+        </div>
+        <div className="flex flex-col items-end gap-1">
+          <SeverityBadge severity={severity} />
+          <span className="type-caption">{analysisType?.replaceAll('_', ' ')}</span>
+        </div>
       </div>
 
-      <div>
-        <p className="type-field-label">Category</p>
-        <p className="type-body mt-1">{category}</p>
+      <div className="mt-5 grid gap-4 sm:grid-cols-2">
+        <RiskScore score={riskScore} severity={severity} />
+        <div>
+          <p className="type-field-label">AI assistance</p>
+          <p className="type-caption mt-2 flex items-center gap-1.5">
+            <Sparkles className="size-3.5 text-brand-300" aria-hidden="true" />
+            {aiStatus === 'completed'
+              ? 'Gemini analysis included'
+              : 'Not used — rule and URL analysis only'}
+          </p>
+        </div>
       </div>
 
-      <div>
+      <div className="mt-5">
         <p className="type-field-label">Summary</p>
         <p className="type-body mt-1">{summary}</p>
       </div>
 
-      {/* Detected indicators */}
       {indicators.length > 0 && (
-        <div>
-          <p className="type-field-label">Detected Indicators</p>
-          <ul className="mt-2 space-y-1 text-slate-300 text-sm line-clamp-3">
-            {indicators.map((indicator, i) => (
-              <li key={i} className="flex items-start gap-2">
-                <ShieldCheck className="size-3 mt-0.5 text-brand-400" aria-hidden />
-                <span>{indicator}</span>
-              </li>
-            ))}
+        <div className="mt-5">
+          <p className="type-field-label">Detected indicators</p>
+          <ul className="mt-2 space-y-2">
+            {indicators.map((indicator, index) => {
+              const item = indicatorText(indicator)
+              return (
+                <li key={`${item.name}-${index}`} className="rounded-lg border border-white/5 bg-navy-900/40 p-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <ShieldCheck className="size-3.5 text-brand-400" aria-hidden="true" />
+                    <span className="text-sm font-medium text-ink">{item.name || 'Indicator'}</span>
+                    {item.severity && <SeverityBadge severity={item.severity} />}
+                    {item.source && (
+                      <span className="type-caption">
+                        {item.source === 'url_based' ? 'URL analysis' : item.source === 'gemini' ? 'Gemini' : 'Rules'}
+                      </span>
+                    )}
+                  </div>
+                  {item.description && (
+                    <p className="type-body-sm mt-1 text-slate-300">{item.description}</p>
+                  )}
+                  {item.url && (
+                    <p className="type-mono mt-1 break-all text-slate-500">{item.url}</p>
+                  )}
+                </li>
+              )
+            })}
           </ul>
         </div>
       )}
 
-      {/* Recommended actions */}
       {recommendedActions.length > 0 && (
-        <div>
-          <p className="type-field-label">Recommended Actions</p>
-          <ul className="mt-2 space-y-1 text-slate-300 text-sm line-clamp-3">
-            {recommendedActions.map((action, i) => (
-              <li key={i} className="flex items-start gap-2">
-                <AlertCircle className="size-3 mt-0.5 text-warning-400" aria-hidden />
+        <div className="mt-5">
+          <p className="type-field-label">Recommended actions</p>
+          <ul className="mt-2 space-y-1.5">
+            {recommendedActions.map((action, index) => (
+              <li key={`${action}-${index}`} className="flex items-start gap-2 text-sm text-slate-300">
+                <AlertCircle className="mt-0.5 size-3.5 shrink-0 text-warning-400" aria-hidden="true" />
                 <span>{action}</span>
               </li>
             ))}
@@ -133,23 +155,25 @@ export function AnalysisResult({ result, hasResult, onDismiss }) {
         </div>
       )}
 
-      {/* Safety warning */}
-      <div className="pt-4 border-t border-navy-700">
-        <p className="type-field-label">Important Safety Warning</p>
-        <p className="type-body mt-1 text-danger-400 line-clamp-3">{safetyWarning}</p>
-      </div>
+      {safetyWarning && (
+        <div className="mt-5 rounded-lg border border-danger-500/20 bg-danger-500/5 p-3">
+          <p className="type-field-label text-danger-400">Safety warning</p>
+          <p className="type-body-sm mt-1 text-slate-300">{safetyWarning}</p>
+        </div>
+      )}
 
-      {/* Dismiss button */}
+      <p className="type-caption mt-4">
+        Heuristic risk assessment — not proof that a message is fraudulent. URLs
+        are never opened or fetched.
+      </p>
+
       <button
         type="button"
         onClick={onDismiss}
-        className={cn(
-          'mt-3 w-full rounded-lg border border-navy-700 bg-navy-900/50 px-4 py-2 text-sm font-medium text-slate-400 hover:bg-white/5 transition-colors duration-200',
-        )}
-        aria-label="Dismiss results"
+        className="mt-4 w-full rounded-lg border border-navy-700 bg-navy-900/50 px-4 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-white/5"
       >
-        Close
+        Clear result
       </button>
-    </div>
+    </section>
   )
 }

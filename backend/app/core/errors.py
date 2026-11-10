@@ -32,12 +32,22 @@ def register_exception_handlers(app: FastAPI) -> None:
     async def validation_exception_handler(
         request: Request, exc: RequestValidationError
     ) -> JSONResponse:
+        # Never echo submitted input back: validation errors for password or
+        # token fields would otherwise expose the raw secret in the response.
+        safe_errors = [
+            {
+                "loc": jsonable_encoder(error.get("loc", [])),
+                "msg": error.get("msg", "Invalid value"),
+                "type": error.get("type", "value_error"),
+            }
+            for error in exc.errors()
+        ]
         return JSONResponse(
             status_code=422,
             content={
                 "status": "error",
                 "detail": "Request validation failed.",
-                "errors": jsonable_encoder(exc.errors()),
+                "errors": safe_errors,
                 "path": request.url.path,
             },
         )

@@ -4,49 +4,51 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 
 class UserCreate(BaseModel):
     """User registration request."""
 
     full_name: str = Field(..., min_length=1, max_length=100)
-    email: str = Field(..., min_length=1, max_length=255)
+    email: EmailStr = Field(...)
     password: str = Field(..., min_length=8, max_length=128)
 
-    @validator("email")
-    def validate_email_format(cls, v: str) -> str:
-        """Validate email format."""
-        if "@" not in v:
-            raise ValueError("Invalid email format")
-        return v
+    @field_validator("full_name")
+    @classmethod
+    def normalize_full_name(cls, value: str) -> str:
+        """Trim the display name and reject whitespace-only values."""
+        cleaned = " ".join(value.split())
+        if not cleaned:
+            raise ValueError("Full name is required")
+        return cleaned
 
-    @validator("password")
-    def validate_password_strength(cls, v: str) -> str:
-        """Validate minimum password length."""
-        if len(v) < 8:
-            raise ValueError("Password must be at least 8 characters long")
-        return v
+    @field_validator("password")
+    @classmethod
+    def reject_blank_password(cls, value: str) -> str:
+        """Passwords must contain more than whitespace."""
+        if not value.strip():
+            raise ValueError("Password must not be blank")
+        return value
 
 
 class UserLogin(BaseModel):
     """User login request."""
 
-    email: str = Field(..., min_length=1, max_length=255)
+    email: EmailStr = Field(...)
     password: str = Field(..., min_length=1, max_length=128)
 
 
 class UserResponse(BaseModel):
     """User response schema (safe, no password hashes)."""
 
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
-    full_name: str
+    full_name: str | None = None
     email: str
     is_active: bool
     created_at: datetime | None = None
-
-    class Config:
-        from_attributes = True
 
 
 class Token(BaseModel):
@@ -67,5 +69,5 @@ class TokenData(BaseModel):
 class PasswordChange(BaseModel):
     """Password change request."""
 
-    old_password: str = Field(..., min_length=8)
-    new_password: str = Field(..., min_length=8)
+    old_password: str = Field(..., min_length=8, max_length=128)
+    new_password: str = Field(..., min_length=8, max_length=128)

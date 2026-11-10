@@ -1,47 +1,29 @@
-import { Loader2 } from 'lucide-react'
-import { useState } from 'react'
+import { Loader2, ScanLine } from 'lucide-react'
 
 export function AnalyzeButton({
   isDisabled = false,
+  isLoading = false,
   onClick,
   children = 'Analyze for Scams',
-  showDemoNotice = true,
 }) {
-  const [isLoading, setIsLoading] = useState(false)
-
-  const handleClick = async (e) => {
-    if (isDisabled) return
-
-    setIsLoading(true)
-    // Simulate a brief local interaction only — no API call
-    await new Promise((resolve) => setTimeout(resolve, 800))
-    setIsLoading(false)
-    onClick?.(e)
-  }
-
-  // Accessible label
-  const ariaLabel = 'Analyze for scams'
-
   return (
     <button
       type="button"
-      onClick={handleClick}
+      onClick={onClick}
       disabled={isDisabled || isLoading}
-      className="w-full rounded-lg border border-brand-500 bg-brand-500 text-navy-950 px-4 py-2.5 text-sm font-medium transition-colors duration-200 hover:bg-brand-400 active:bg-brand-600" aria-label={ariaLabel}
+      aria-busy={isLoading || undefined}
+      className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 py-3 text-sm font-semibold text-navy-950 transition-colors duration-200 hover:bg-brand-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-400 disabled:pointer-events-none disabled:opacity-50"
     >
       {isLoading ? (
         <>
-          <Loader2 />
-          Processing
+          <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+          Analyzing…
         </>
       ) : (
-        children
-      )}
-      {showDemoNotice && !isLoading && (
-        <p className="mt-1 text-xs text-slate-500">
-          Demo mode: The detection engine will be connected in a later
-          development phase.
-        </p>
+        <>
+          <ScanLine className="size-4" aria-hidden="true" />
+          {children}
+        </>
       )}
     </button>
   )

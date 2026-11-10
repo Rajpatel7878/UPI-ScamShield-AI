@@ -2,6 +2,7 @@
 
 from functools import lru_cache
 
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -22,10 +23,59 @@ class Settings(BaseSettings):
     api_prefix: str = "/api/v1"
     frontend_url: str = "http://localhost:5173"
 
+    # Comma-separated additional browser origins, e.g.
+    # CORS_ORIGINS=https://app.example.com,https://staging.example.com
+    cors_origins_raw: str = Field(
+        default="",
+        validation_alias=AliasChoices("CORS_ORIGINS", "CORS_EXTRA_ORIGINS"),
+    )
+
+    # Authentication. A strong secret is mandatory in production; see
+    # app.core.security for startup validation.
+    jwt_secret_key: str = Field(
+        default="",
+        validation_alias=AliasChoices("JWT_SECRET_KEY", "SECRET_KEY"),
+    )
+    jwt_algorithm: str = Field(default="HS256", validation_alias="JWT_ALGORITHM")
+    access_token_expire_minutes: int = Field(
+        default=30,
+        validation_alias="ACCESS_TOKEN_EXPIRE_MINUTES",
+        ge=5,
+        le=1440,
+    )
+
+    # Abuse protection (single-process, in-memory sliding windows). Documented
+    # in README; replace with a shared store when running multiple workers.
+    rate_limit_login_per_minute: int = 10
+    rate_limit_register_per_5_minutes: int = 5
+    rate_limit_analyze_per_minute: int = 30
+    rate_limit_api_per_minute: int = 300
+    trust_proxy_headers: bool = False
+    max_request_bytes: int = 1_048_576
+
+    @property
+    def is_production(self) -> bool:
+        """Whether the app is running with production safeguards."""
+        return self.environment.strip().lower() in {"production", "prod"}
+
     @property
     def cors_origins(self) -> list[str]:
         """Origins allowed to call this API from a browser."""
-        return [self.frontend_url.rstrip("/")]
+        origins = [self.frontend_url.rstrip("/")]
+        origins.extend(
+            origin.strip().rstrip("/")
+            for origin in self.cors_origins_raw.split(",")
+            if origin.strip()
+        )
+        # Preserve order while removing duplicates and wildcards.
+        seen: set[str] = set()
+        allowed: list[str] = []
+        for origin in origins:
+            if not origin or origin == "*" or origin in seen:
+                continue
+            seen.add(origin)
+            allowed.append(origin)
+        return allowed
 
     @property
     def api_v1_prefix(self) -> str:

@@ -4,3 +4,12 @@ pydantic==2.14.3
 pydantic-settings==2.16.2
 python-dotenv==1.2.4
 SQLAlchemy==2.1.8
+
+# Authentication (PyJWT replaces python-jose, which pulled a vulnerable ecdsa)
+PyJWT==2.15.1
+passlib[argon2]==1.7.4
+argon2-cffi==25.1.0
+email-validator==2.3.0
+
+# Optional AI analysis (backend-only API key)
+google-genai==3.0.0

@@ -15,13 +15,16 @@ DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./scamshield.db")
 # Engine configuration
 # - echo=False: disable SQL logging (set True for debugging)
 # - future=True: use SQLAlchemy 2.0 style
-# - connect_args: SQLite-specific settings
-engine: Engine = create_engine(
-    DATABASE_URL,
-    echo=False,
-    future=True,
-    connect_args={"check_same_thread": False},
-)
+# - connect_args/pool settings are database-specific
+_engine_options: dict = {"echo": False, "future": True}
+if DATABASE_URL.startswith("sqlite"):
+    _engine_options["connect_args"] = {"check_same_thread": False}
+else:
+    # Recover from database restarts and avoid handing out dead connections.
+    _engine_options["pool_pre_ping"] = True
+    _engine_options["pool_recycle"] = 1800
+
+engine: Engine = create_engine(DATABASE_URL, **_engine_options)
 
 # Session factory
 # - autocommit=False: manual commit control

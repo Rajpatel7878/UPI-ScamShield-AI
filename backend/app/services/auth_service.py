@@ -1,170 +1,109 @@
 """Authentication service business logic."""
 
+import logging
+
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.core.security import verify_password, get_password_hash, create_access_token, decode_access_token
+from app.core.config import get_settings
+from app.core.security import (
+    create_access_token,
+    decode_access_token,
+    get_password_hash,
+    verify_password,
+)
 from app.models.user import User
-from app.schemas.auth import UserCreate, UserLogin, UserResponse, Token, TokenData
+from app.schemas.auth import Token, TokenData, UserCreate, UserLogin, UserResponse
+
+logger = logging.getLogger(__name__)
 
 
 def register_user(db: Session, user_data: UserCreate) -> UserResponse:
     """Register a new user.
 
-    Args:
-        db: Database session
-        user_data: User registration data
-
-    Returns:
-        User response object (without password hash)
-
     Raises:
-        ValueError: If email already exists
+        ValueError: If the email already exists.
     """
-    # Check for existing user with normalized email
-    from sqlalchemy import select
-    stmt = select(User).where(User.email == user_data.email.lower())
-    existing = db.scalar(stmt)
+    email = str(user_data.email).strip().lower()
+    existing = db.scalar(select(User).where(User.email == email))
     if existing:
         raise ValueError("Email already registered")
 
-    # Create user with hashed password
-    hashed_password = get_password_hash(user_data.password)
     db_user = User(
-        email=user_data.email.lower(),
+        email=email,
         full_name=user_data.full_name,
-        hashed_password=hashed_password,
+        hashed_password=get_password_hash(user_data.password),
     )
     db.add(db_user)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # Handles the race where two requests register the same email at once.
+        db.rollback()
+        raise ValueError("Email already registered")
     db.refresh(db_user)
 
-    return UserResponse(
-        id=db_user.id,
-        full_name=db_user.full_name,
-        email=db_user.email,
-        is_active=db_user.is_active,
-        created_at=db_user.created_at,
-    )
+    return UserResponse.model_validate(db_user)
 
 
 def authenticate_user(db: Session, email: str, password: str) -> User | None:
     """Authenticate a user with email and password.
 
-    Args:
-        db: Database session
-        email: User email (normalized)
-        password: Plaintext password
-
-    Returns:
-        User object if authentication successful, None otherwise
+    Uses the same failure result for unknown emails and wrong passwords so the
+    response does not disclose whether an account exists.
     """
-    # Normalize email
-    normalized_email = email.lower().strip()
-
-    # Query user by normalized email
-    from sqlalchemy import select
-    stmt = select(User).where(User.email == normalized_email)
-    user = db.scalar(stmt)
-
+    normalized_email = str(email).strip().lower()
+    user = db.scalar(select(User).where(User.email == normalized_email))
     if not user:
         return None
-
-    # Verify password against Argon2 hash
     if not verify_password(password, user.hashed_password):
         return None
-
-    # Check account is active
     if not user.is_active:
         return None
-
     return user
 
 
 def login_user(db: Session, user_login: UserLogin) -> Token:
-    """Login user and generate JWT access token.
-
-    Args:
-        db: Database session
-        user_login: Login credentials
-
-    Returns:
-        Token response with access token
+    """Authenticate a user and issue a JWT access token.
 
     Raises:
-        ValueError: If credentials are invalid or account is inactive
+        ValueError: If credentials are invalid or the account is inactive.
     """
     user = authenticate_user(db, user_login.email, user_login.password)
     if user is None:
         raise ValueError("Incorrect email or password")
 
-    # Create access token
     access_token = create_access_token(subject=user.id)
-
     return Token(
         access_token=access_token,
-        expires_in=1800,  # 30 minutes
+        expires_in=get_settings().access_token_expire_minutes * 60,
     )
 
 
 def get_user_by_id(db: Session, user_id: int) -> User | None:
-    """Get user by ID.
-
-    Args:
-        db: Database session
-        user_id: User primary key
-
-    Returns:
-        User object or None
-    """
-    from sqlalchemy import select
-    stmt = select(User).where(User.id == user_id)
-    return db.scalar(stmt)
+    """Get a user by primary key."""
+    return db.get(User, user_id)
 
 
 def get_token_payload(token: str) -> TokenData | None:
-    """Extract and validate token payload.
-
-    Args:
-        token: JWT access token
-
-    Returns:
-        TokenData if valid, None otherwise
-    """
+    """Extract and validate a token payload."""
     payload = decode_access_token(token)
     if payload is None:
         return None
-
-    user_id = payload.get("sub")
-    if user_id is None:
+    try:
+        user_id = int(payload.get("sub"))
+    except (TypeError, ValueError):
         return None
-
-    return TokenData(user_id=int(user_id))
+    return TokenData(user_id=user_id)
 
 
 def verify_token_and_get_user(db: Session, token: str) -> User | None:
-    """Verify a JWT token and return the associated user.
-
-    Args:
-        db: Database session
-        token: JWT access token string
-
-    Returns:
-        User object if token is valid and user exists, None otherwise
-    """
-    payload = decode_access_token(token)
-    if payload is None:
+    """Verify a JWT and return the associated active user."""
+    token_data = get_token_payload(token)
+    if token_data is None or token_data.user_id is None:
         return None
-
-    user_id = payload.get("sub")
-    if user_id is None:
+    user = get_user_by_id(db, token_data.user_id)
+    if user is None or not user.is_active:
         return None
-
-    user = get_user_by_id(db, int(user_id))
-    if user is None:
-        return None
-
-    # Check account is still active
-    if not user.is_active:
-        return None
-
     return user

@@ -17,14 +17,14 @@ def test_root_returns_service_metadata() -> None:
     }
 
 
-def test_health_reports_database_as_not_configured() -> None:
-    """Health endpoint returns healthy status with not_configured database."""
+def test_health_reports_database_connectivity() -> None:
+    """Health endpoint reports real database connectivity."""
     response = client.get("/api/v1/health")
 
     assert response.status_code == 200
     assert response.json() == {
         "status": "healthy",
-        "database": "not_configured",
+        "database": "connected",
         "service": "UPI ScamShield AI",
         "environment": "development",
     }

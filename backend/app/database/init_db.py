@@ -8,7 +8,7 @@ Uses SQLAlchemy's create_all which is safe for existing tables.
 from sqlalchemy import inspect
 from sqlalchemy.engine import Engine
 
-from app.database.connection import engine, session_factory, Base
+from app.database.connection import engine, get_session, session_factory, Base
 
 
 def table_exists(engine: Engine, table_name: str) -> bool:
@@ -25,15 +25,15 @@ def init_db() -> None:
 
     Use in development startup. For production schema changes, use Alembic migrations.
     """
-    # Create all tables that don't already exist
+    # Create all tables that don't already exist.
     Base.metadata.create_all(bind=engine)
 
-    # Verify creation
-    inspector = inspect(engine)
-    for table_name in Base.metadata.tables:
-        if not inspector.has_table(table_name):
-            # This shouldn't happen, but just in case
-            pass
+    # create_all does not add new indexes to tables that already exist. Create
+    # any missing indexes explicitly; checkfirst makes this idempotent and it
+    # never deletes data.
+    for table in Base.metadata.tables.values():
+        for index in table.indexes:
+            index.create(bind=engine, checkfirst=True)
 
 
 def init_db_with_session() -> None:

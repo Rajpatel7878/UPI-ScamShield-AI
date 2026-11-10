@@ -2,11 +2,13 @@ import { Loader2 } from 'lucide-react'
 import { cn } from '../../utils/cn.js'
 
 /** Minimum and maximum character limits per content type. */
+// The backend accepts up to 10,000 characters for every message type. SMS is
+// limited to 10,000 rather than 160 so multi-part messages can be analyzed.
 const LIMITS = {
-  sms: { min: 1, max: 160 },
-  whatsapp: { min: 1, max: 65000 },
-  payment: { min: 1, max: 1000 },
-  url: { min: 1, max: 500 },
+  sms: { min: 1, max: 10000 },
+  whatsapp: { min: 1, max: 10000 },
+  payment: { min: 1, max: 10000 },
+  url: { min: 1, max: 10000 },
 }
 
 /** Placeholder text per content type. */
@@ -34,7 +36,6 @@ export function MessageInput({
 }) {
   const handleClear = () => {
     onClear()
-    setTimeout(() => {}, 150)
   }
 
   const limits = LIMITS[contentType]
@@ -63,23 +64,21 @@ export function MessageInput({
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         aria-label={label}
+        aria-describedby="detection-input-counter"
+        maxLength={limits?.max}
         disabled={disabled}
       ></textarea>
 
-      {disabled || (showCounter && limits) && (
-        <div className="flex items-baseline justify-between text-xs text-slate-500">
-          {value.length > 0 && (
-            <span className={cn(
-              'flex items-center gap-1',
-              isAtLimit && 'text-danger-400',
-              isBelowMin && 'text-warning-400',
-            )}>
-              {value.length}/{limits.max}
-            </span>
-          )}
-          {remaining !== undefined && (
-            <span>{remaining} remaining</span>
-          )}
+      {limits && value.length > 0 && (
+        <div id="detection-input-counter" className="flex items-baseline justify-between text-xs text-slate-500">
+          <span className={cn(
+            'flex items-center gap-1',
+            isAtLimit && 'text-danger-400',
+            isBelowMin && 'text-warning-400',
+          )}>
+            {value.length}/{limits.max}
+          </span>
+          <span>{remaining} remaining</span>
         </div>
       )}
 

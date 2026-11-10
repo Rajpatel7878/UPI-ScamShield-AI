@@ -1,28 +1,25 @@
-import { BaseCard, InfoCard } from '../../components/ui/Card.jsx'
-import { RISK_INDICATORS } from '../../mock-data/dashboard.js'
+import { BaseCard } from '../ui/Card.jsx'
 
-export function RiskInsights() {
+export function RiskInsights({ insights }) {
+  const items = Array.isArray(insights) ? insights.filter(Boolean) : []
+
   return (
-    <BaseCard className="pt-0">
-      <div className="flex items-center justify-between gap-3 pb-3 border-b border-white/5">
-        <h3 className="type-h3">Common Risk Indicators</h3>
-        <span className="type-caption text-slate-500">
-          Demo indicators • Not from real analysis
-        </span>
+    <BaseCard className="mt-6">
+      <div className="mb-3">
+        <p className="type-label">Insights</p>
+        <h3 className="type-h3 mt-1">Security Insights</h3>
       </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        {RISK_INDICATORS.map((item) => (
-          <InfoCard
-            key={item.id}
-            title={item.title}
-            icon={item.icon}
-            tone="warning"
-          >
-            <p className="type-body-sm text-slate-300">{item.description}</p>
-          </InfoCard>
-        ))}
-      </div>
+      {items.length === 0 ? (
+        <p className="text-sm text-slate-400">No insights available yet. Run analyses to generate security insights.</p>
+      ) : (
+        <ul className="space-y-2">
+          {items.map((text, idx) => (
+            <li key={idx} className="rounded-lg border border-white/10 p-3 text-sm text-slate-300">
+              {String(text)}
+            </li>
+          ))}
+        </ul>
+      )}
     </BaseCard>
   )
 }

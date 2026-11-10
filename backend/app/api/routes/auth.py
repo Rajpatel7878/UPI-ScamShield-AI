@@ -3,12 +3,10 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.core.config import get_settings
-from app.core.security import create_access_token
-from app.core.dependencies import get_db_session, get_current_user
+from app.core.dependencies import get_current_user, get_db_session
 from app.models.user import User
-from app.schemas.auth import UserCreate, UserLogin, UserResponse, Token, TokenData
-from app.services.auth_service import register_user, authenticate_user, login_user
+from app.schemas.auth import Token, UserCreate, UserLogin, UserResponse
+from app.services.auth_service import login_user, register_user
 
 router = APIRouter(tags=["authentication"])
 
@@ -20,22 +18,15 @@ async def register(
 ) -> UserResponse:
     """Register a new user account.
 
-    - **full_name**: User's full name
-    - **email**: Valid email address
-    - **password**: Minimum 8 characters
-
-    Returns:
-        User response without password hash
-
-    Raises:
-        400: If email already registered
+    Passwords are hashed with Argon2 and never returned. Duplicate emails are
+    rejected without revealing account details beyond the conflict itself.
     """
     try:
         return register_user(db, user_data)
-    except ValueError as e:
+    except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e),
+            detail=str(exc),
         )
 
 
@@ -44,56 +35,40 @@ async def login(
     login_data: UserLogin,
     db: Session = Depends(get_db_session),
 ) -> Token:
-    """Login with email and password.
+    """Authenticate and return a short-lived JWT access token.
 
-    - **email**: User's email address
-    - **password**: Plaintext password
-
-    Returns:
-        JWT access token and expiration info
-
-    Raises:
-        401: If credentials are invalid or account is inactive
+    The password is verified exactly once. Unknown emails and wrong passwords
+    return the same generic error.
     """
-    user = authenticate_user(db, login_data.email, login_data.password)
-    if user is None:
+    try:
+        return login_user(db, login_data)
+    except ValueError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
+            headers={"WWW-Authenticate": "Bearer"},
         )
-
-    return login_user(db, login_data)
 
 
 @router.get("/me", response_model=UserResponse)
 async def get_current_user_profile(
     current_user: User = Depends(get_current_user),
 ) -> UserResponse:
-    """Get current user profile.
-
-    Requires valid Bearer access token.
-
-    Returns:
-        User profile information (no password hash)
-    """
-    return UserResponse(
-        id=current_user.id,
-        full_name=current_user.full_name,
-        email=current_user.email,
-        is_active=current_user.is_active,
-        created_at=current_user.created_at,
-    )
+    """Return the authenticated user's profile (no password hash)."""
+    return UserResponse.model_validate(current_user)
 
 
 @router.post("/logout")
 async def logout() -> dict:
-    """Logout client-side token removal.
+    """Acknowledge client-side token removal.
 
-    For a stateless JWT system, this endpoint acknowledges that
-    the client should remove the token. The server does not
-    magically revoke already-issued tokens.
-
-    Returns:
-        Confirmation message
+    JWTs are stateless, so the server cannot revoke an already-issued token
+    without a denylist. Clients must delete the token; tokens expire after the
+    configured lifetime.
     """
-    return {"message": "Token should be client-side removed. Stateless JWT does not server-side revoke."}
+    return {
+        "message": (
+            "Remove the access token on the client. Stateless JWTs cannot be "
+            "revoked server-side; they expire automatically."
+        )
+    }

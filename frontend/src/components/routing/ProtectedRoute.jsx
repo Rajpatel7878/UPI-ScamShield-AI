@@ -1,29 +1,30 @@
 import { Navigate, useLocation } from 'react-router-dom'
-import { useAuth } from '../context/AppContext.js'
+import { useAuth } from '../../context/AppContext.jsx'
 
 /**
  * Renders children if the user is authenticated.
  * Redirects unauthenticated users to /login, preserving the intended destination.
  */
 export function ProtectedRoute({ children }) {
-  const { isAuthenticated, isLoadingAuth, logout, refreshAuth } = useAuth()
+  const { isAuthenticated, isLoadingAuth } = useAuth()
   const location = useLocation()
 
-  // If still loading auth state, render nothing (avoid redirect flicker)
   if (isLoadingAuth) {
-    return null
+    return (
+      <div role="status" aria-live="polite" className="py-10 text-center text-sm text-slate-400">
+        Checking your session…
+      </div>
+    )
   }
 
-  // If not authenticated, redirect to login with return URL
   if (!isAuthenticated) {
     return <Navigate to="/login" replace state={{ from: location }} />
   }
 
-  // User is authenticated; render children
   return children
 }
 
-/** Optional: expose the logout function for use in UI */
+/** Expose auth actions for UI components. */
 export function useAuthActions() {
   const { logout, refreshAuth } = useAuth()
   return { logout, refreshAuth }

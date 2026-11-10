@@ -1,33 +1,29 @@
-import { ShieldCheck } from 'lucide-react'
-import { useState, useEffect } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { RefreshCw } from 'lucide-react'
 
-import { AppLayout } from '../components/layout/AppLayout.jsx'
 import {
-  DashboardStatsCard,
-  RiskDistributionChart,
   ActivityChart,
-  RecentScans,
-  RiskInsights,
+  DashboardStatsCard,
   QuickActions,
+  RecentScans,
+  RiskDistributionChart,
+  RiskInsights,
 } from '../components/dashboard/index.js'
-
-import { useAuth } from '../context/AppContext.js'
+import { BaseCard, EmptyState } from '../components/ui/index.js'
+import { useAuth } from '../context/AppContext.jsx'
 import { createApiClient } from '../services/apiClient.js'
 
-/** Dashboard page. */
 export default function Dashboard() {
-  const { user, isAuthenticated } = useAuth()
-  const api = createApiClient()
-
+  const { isAuthenticated, user } = useAuth()
+  const api = useMemo(() => createApiClient(), [])
   const [stats, setStats] = useState(null)
-  const [refreshing, setRefreshing] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [currentDate, setCurrentDate] = useState('')
 
-  // Set date once on mount
   useEffect(() => {
-    const date = new Date()
     setCurrentDate(
-      date.toLocaleDateString(undefined, {
+      new Date().toLocaleDateString(undefined, {
         weekday: 'long',
         year: 'numeric',
         month: 'long',
@@ -36,138 +32,95 @@ export default function Dashboard() {
     )
   }, [])
 
-  // Fetch statistics from backend
+  const fetchStats = async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const response = await api.get('/dashboard/stats')
+      setStats(response.data || null)
+    } catch (err) {
+      setError(err?.message || 'Failed to load dashboard statistics.')
+      setStats(null)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   useEffect(() => {
     if (!isAuthenticated) return
-
-    const fetchStats = async () => {
-      setRefreshing(true)
-      try {
-        const response = await api.get('/dashboard/stats')
-        setStats(response.data)
-      } catch (err) {
-        const message =
-          err.response?.data?.detail ||
-          err.message ||
-          'Failed to load dashboard statistics.'
-        alert(message)
-      } finally {
-        setRefreshing(false)
-      }
-    }
-
     fetchStats()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated])
 
-  // Simulate a refresh interaction — UI only; real refresh re-fetches data
-  const handleRefresh = () => {
-    setRefreshing(true)
-    // Re-fetch stats in addition to the skeleton animation
-    const fetchStats = async () => {
-      try {
-        const response = await api.get('/dashboard/stats')
-        setStats(response.data)
-      } catch (err) {
-        // swallow fetch errors during animation
-      }
-    }
-    fetchStats()
-    setTimeout(() => setRefreshing(false), 1200)
-  }
+  if (!isAuthenticated) return null
 
-  if (!isAuthenticated) {
-    return null
-  }
+  const totalScans = Number(stats?.total_scans || 0)
+  const suspicious = Number(stats?.suspicious_scans || 0)
+  const critical = Number(stats?.critical_alerts || 0)
+  const avgRisk = Number(stats?.average_risk_score || 0)
+  const isEmpty = totalScans === 0
 
   return (
-    <AppLayout>
-      {/* Security Overview Header */}
-      <header className="pt-6">
+    <div>
+      <header>
         <div className="max-w-7xl mx-auto">
-          <h2 className="type-h2 mb-1">Security Overview</h2>
-          <p className="type-body text-muted mb-4">
-            Monitor suspicious activity, review risk insights, and stay informed
-            about your digital payment security.
-          </p>
-
-          {/* Welcome message + date + refresh */}
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 sm:gap-2">
-            <p className="type-body text-slate-400">Welcome back.</p>
-            <p className="type-body text-slate-400 sm:ml-4">{currentDate}</p>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <p className="type-body text-slate-400">Welcome back{user?.name ? `, ${user.name}` : ''}.</p>
+            <p className="type-body text-slate-400">{currentDate}</p>
             <button
-              onClick={handleRefresh}
-              className={cn(
-                'inline-flex items-center rounded-lg border border-navy-700 bg-transparent px-3 py-1.5 text-sm font-medium text-slate-400 hover:bg-white/5 transition-colors duration-200',
-                refreshing && 'animate-spin',
-              )}
+              onClick={fetchStats}
+              className="inline-flex items-center rounded-lg border border-white/10 bg-transparent px-3 py-1.5 text-sm font-medium text-slate-300 hover:bg-white/5"
               aria-label="Refresh dashboard data"
             >
-              {refreshing ? (
-                <span className="size-4 animate-spin" aria-hidden="true" />
-              ) : (
-                <ShieldCheck className="size-4 mr-1.5" aria-hidden="true" />
-              )}
+              <RefreshCw className={`mr-1.5 size-4 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" />
               Refresh
             </button>
           </div>
         </div>
       </header>
 
-      {/* Statistics Cards Row */}
+      {error ? (
+        <BaseCard className="mt-6">
+          <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4">
+            <p className="text-red-300">{error}</p>
+            <button className="mt-2 underline text-sm" onClick={fetchStats}>Retry</button>
+          </div>
+        </BaseCard>
+      ) : null}
+
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 mt-6">
-        {stats && stats.risk_distribution
-          ? Object.entries(stats.risk_distribution).map(([riskLevel, count]) => (
-              <DashboardStatsCard
-                key={riskLevel}
-                label={riskLevel}
-                value={count || 0}
-                description={'Scans at this risk level'}
-                icon='ShieldCheck'
-                tone='neutral'
-              />
-            ))
-          : (
-              <DashboardStatsCard
-                label='Total Scans'
-                value={stats ? stats.total_scans || 0 : 0}
-                description={'No scan data available'}
-                icon='Clock'
-                tone='neutral'
-              />
-            )}
+        <DashboardStatsCard label="Total Scans" value={totalScans} description="All saved analyses" tone="brand" />
+        <DashboardStatsCard label="Suspicious Scans" value={suspicious} description="Medium, high, or critical" tone="warning" />
+        <DashboardStatsCard label="Critical Alerts" value={critical} description="Critical risk results" tone="danger" />
+        <DashboardStatsCard label="Average Risk Score" value={avgRisk} description="Across selected records" tone="neutral" />
       </div>
 
-      {/* Risk Distribution + Activity Charts Row (desktop: side-by-side, mobile: stacked) */}
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 mt-6">
-        {stats && stats.risk_distribution
-          ? (
-              <>
-                <RiskDistributionChart
-                  distribution={stats.risk_distribution}
-                />
-                <ActivityChart
-                  recent_activity={stats.recent_activity || []}
-                />
-              </>
-            )
-          : (
-              <RiskDistributionChart />
-              <ActivityChart />
-            )}
-      </div>
+      {isEmpty && !loading ? (
+        <BaseCard className="mt-6">
+          <EmptyState
+            title="No scan data yet"
+            description="Run your first analysis to populate dashboard statistics, recent scans, and insights."
+          />
+        </BaseCard>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 mt-6">
+            <BaseCard>
+              <h3 className="type-h3 mb-3">Risk Distribution</h3>
+              <RiskDistributionChart distribution={stats?.risk_distribution} />
+            </BaseCard>
+            <BaseCard>
+              <h3 className="type-h3 mb-3">Scan Activity</h3>
+              <ActivityChart daily_scan_activity={stats?.daily_scan_activity} recent_activity={stats?.recent_activity} />
+            </BaseCard>
+          </div>
 
-      {/* Recent Scan Activity */}
-      {stats && stats.recent_scans
-        ? <RecentScans scans={stats.recent_scans} />
-        : <RecentScans />}
+          <RecentScans scans={stats?.recent_scans} />
+          <RiskInsights insights={stats?.risk_insights || stats?.security_insights} />
+        </>
+      )}
 
-      {/* Risk Insights Panel */}
-      {stats && stats.risk_insights
-        ? <RiskInsights insights={stats.risk_insights} />
-        : <RiskInsights />}
-
-      {/* Quick Actions */}
       <QuickActions />
-    </AppLayout>
+    </div>
   )
 }

@@ -1,1 +1,540 @@
-\"\"\"Detection analysis API routes.\n\nHandles the POST /api/v1/detect/analyze endpoint for hybrid fraud detection\ncombining rule-based (Phase 10), Gemini AI (Phase 11), and URL analysis (Phase 13).\n\"\"\"\nfrom __future__ import annotations\n\nfrom fastapi import APIRouter, Depends, HTTPException, status\nfrom sqlalchemy.orm import Session\n\nfrom app.core.config import get_settings\nfrom app.core.dependencies import get_db_session, get_current_user\nfrom app.core.errors import register_exception_handlers\nfrom app.models.user import User\nfrom app.models.scan import Scan\nfrom app.schemas.detection import (\n    DetectionRequest,\n    DetectionResponse,\n    DetectionErrorResponse,\n    SUPPORTED_CONTENT_TYPES,\n)\nfrom app.services.detection.rule_detector import RuleDetector\nfrom app.services.detection.risk_scorer import RiskScorer\nfrom app.services.detection.explanation_service import ExplanationService\nfrom app.services.detection.gemini_service import GeminiService, is_gemini_configured\nfrom app.services.detection.hybrid_scorer import HybridScorer\nfrom app.services.detection.url_detector import URLDetector, detect_urls_in_message\nimport uuid\nfrom datetime import datetime, timezone\n\n\nrouter = APIRouter(tags=[\"detection\"])\n\n\ndef _build_summary(analysis_result: dict, score_result: dict) -> str:\n    \"\"\"Build a human-readable summary of the analysis.\"\"\"\n    matched = analysis_result[\"matched_rule_names\"]\n    if not matched:\n        return \"The message does not contain indicators commonly associated with UPI scams.\"\n    \n    # Build summary from matched categories\n    categories: set[str] = set()\n    for rule_name in matched:\n        rule_category = analysis_result[\"categories\"].get(rule_name, \"\")\n        if rule_category:\n            categories.add(rule_category)\n    \n    if not categories:\n        categories = {\"General Scam\"}\n    \n    # Count total matched indicators\n    indicator_count = len(matched)\n    \n    if indicator_count == 1:\n        rule_name = matched[0]\n        rule_category = analysis_result[\"categories\"].get(rule_name, \"\")\n        if rule_category:\n            return f\"The message contains an indicator commonly associated with {rule_category.lower()}.\"\n        return \"The message contains a suspicious indicator.\"\n    else:\n        return f\"The message contains {indicator_count} indicators commonly associated with multiple fraud categories.\"\n\n\ndef _build_indicators(analysis_result: dict) -> list[dict]:\n    \"\"\"Build the list of matched indicators for the response.\"\"\"\n    matched = analysis_result[\"matched_rule_names\"]\n    indicators = []\n    \n    for rule_name in matched:\n        indicators.append({\n            \"rule_id\": None,\n            \"name\": rule_name,\n            \"severity\": analysis_result[\"severities\"].get(rule_name, \"\"),\n            \"description\": analysis_result[\"explanations\"].get(rule_name, \"\"),\n        })\n    \n    return indicators\n\n\n@router.post(\n    \"/analyze\",n    response_model=DetectionResponse,\n    status_code=200,\n    summary=\"Analyze text for UPI fraud indicators\",\n    description=\"Analyze submitted text for hybrid fraud detection combining\n    rule-based (Phase 10), Gemini AI (Phase 11), and URL analysis (Phase 13).\n    \n    Supported content types:\n    - sms: SMS messages\n    - whatsapp: WhatsApp messages\n    - payment_request: Payment request texts\n    - general: General text messages\n    - url: Standalone suspicious URL analysis\n    \n    Requires valid Bearer access token.\n    Returns risk score, matched indicators, and safety recommendations.\n    \"\"\"\n    async def analyze(\n        request: DetectionRequest,\n        current_user: User = Depends(get_current_user),\n        db: Session = Depends(get_db_session),\n    ) -> DetectionResponse:\n        \"\"\"Analyze submitted text for UPI fraud indicators using hybrid approach.\n        \n        This endpoint:\n        1. Validates the input using Pydantic schemas\n        2. Runs rule-based detection (always available from Phase 10)\n        3. Runs Gemini AI analysis if API key is configured (Phase 11)\n        4. Runs URL analysis if URLs are found in the message or content is 'url' type (Phase 13)\n        5. Uses HybridScorer to combine all results into a single assessment\n        6. Persists the scan to the database\n        7. Returns a structured response with risk level and recommendations\n        \n        Args:\n            request: The detection request containing content and content_type.\n            current_user: The authenticated user (injected via dependency).\n            db: Database session (injected via dependency).\n        \n        Returns:\n            DetectionResponse with analysis results.\n        \"\"\"\n        # Initialize the rule detector\n        detector = RuleDetector()\n        \n        # Initialize URL detector\n        url_detector = URLDetector()\n        \n        # Run rule-based detection (always available)\n        analysis_result = detector.detect(\n            content=request.content,\n            content_type=request.content_type,\n        )\n        \n        # Calculate rule-based risk score and details\n        scorer = RiskScorer()\n        score_result = scorer.calculate_score(analysis_result[\"matched_rule_names\"])\n        \n        # Run Gemini AI analysis if configured\n        gemini_result = None\n        if is_gemini_configured():\n            gemini_service = GeminiService()\n            gemini_result = gemini_service.analyze(\n                content=request.content,\n                content_type=request.content_type,\n            )\n        \n        # Run URL analysis if content type is 'url' or if message contains URLs\n        url_analysis = None\n        url_content_type = request.content_type\n        \n        if url_content_type == \"url\":\n            # Standalone URL analysis\n            url_analysis = url_detector.analyze_url(request.content)\n        elif url_content_type in {\"sms\", \"whatsapp\", \"payment_request\", \"general\"}:\n            # Check if message contains URLs\n            if any(word in request.content.lower() for word in ['http', 'https', 'www']):\n                url_analysis = detect_urls_in_message(request.content)\n        \n        # Use HybridScorer to combine all available results\n        hybrid_scorer = HybridScorer()\n        \n        # Prepare rule-based data for hybrid scorer\n        rule_indicators = analysis_result.get(\"indicators\", [])\n        rule_recommendations = analysis_result.get(\"recommendations\", [])\n        \n        # Extract Gemini result data\n        gemini_score = 0\n        gemini_risk_level = \"Low\"\n        gemini_category = \"\"\n        gemini_indicators: list[dict] = []\n        gemini_recommendations: list[str] = []\n        \n        if gemini_result and gemini_result.get(\"status\") == \"completed\" and gemini_result.get(\"result\"):\n            gemini_result_obj = gemini_result[\"result\"]\n            gemini_score = gemini_result_obj.confidence * 100  # Convert 0-1 confidence to 0-100\n            gemini_risk_level = gemini_result_obj.risk_level\n            gemini_category = gemini_result_obj.category\n            gemini_indicators = [\n                {\n                    \"name\": ind.name,\n                    \"severity\": ind.severity,\n                    \"description\": ind.explanation,\n                    \"source\": \"gemini\",\n                }\n                for ind in gemini_result_obj.indicators\n            ]\n            gemini_recommendations = gemini_result_obj.recommendations\n        \n        # Run hybrid scoring\n        hybrid_result = hybrid_scorer.score(\n            rule_score=score_result[\"total_score\"],\n            rule_risk_level=score_result[\"risk_level\"],\n            rule_category=score_result[\"category\"],\n            rule_indicators=rule_indicators,\n            rule_recommendations=rule_recommendations,\n            gemini_result={\n                \"status\": gemini_result[\"status\"] if gemini_result else \"unavailable\",\n                \"model\": gemini_result[\"model\"] if gemini_result else None,\n                \"result\": {\n                    \"is_suspicious\": gemini_result_obj.is_suspicious if gemini_result_obj else False,\n                    \"risk_level\": gemini_risk_level,\n                    \"category\": gemini_category,\n                    \"summary\": hybrid_result[\"summary\"] if hybrid_result else \"\",\n                    \"indicators\": gemini_indicators,\n                    \"recommendations\": gemini_recommendations,\n                    \"confidence\": gemini_result_obj.confidence if gemini_result_obj else 0.0,\n                },\n            } if gemini_result and gemini_result.get(\"status\") == \"completed\" and gemini_result.get(\"result\") else None,\n        )\n        \n        # Build the response\n        # Generate a scan ID\n        scan_id = str(uuid.uuid4())\n        \n        # Get current ISO-8601 timestamp\n        created_at = datetime.now(timezone.utc).isoformat()\n        \n        # Build summary and indicators\n        summary = _build_summary(analysis_result, score_result)\n        indicators = _build_indicators(analysis_result)\n        \n        # Associate the scan with the authenticated user\n        # Create and persist the scan record\n        scan = Scan(\n            user_id=current_user.id,\n            content_type=request.content_type,\n            risk_score=hybrid_result[\"hybrid_score\"],\n            risk_level=hybrid_result[\"risk_level\"],\n            category=hybrid_result[\"category\"],\n            summary=hybrid_result[\"summary\"],\n            indicators=hybrid_result[\"indicators\"],\n            recommendations=hybrid_result[\"recommendations\"],\n            # We do NOT store the raw content per privacy requirements\n            content_hash=None,\n        )\n        \n        db.add(scan)\n        db.commit()\n        db.refresh(scan)\n        \n        # Build the AI analysis section\n        ai_analysis = _build_ai_analysis(gemini_result, gemini_result_obj if 'gemini_result_obj' in dir() else None)\n        \n        # Build URL analysis section\n        url_analysis_section = _build_url_analysis(url_analysis)\n        \n        # Build the full response\n        response = DetectionResponse(\n            success=True,\n            scan_id=scan_id,\n            analysis_type=hybrid_result[\"analysis_type\"],\n            risk_score=hybrid_result[\"hybrid_score\"],\n            risk_level=hybrid_result[\"risk_level\"],\n            category=hybrid_result[\"category\"],\n            summary=summary,\n            indicators=indicators,\n            recommendations=hybrid_result[\"recommendations\"],\n            created_at=created_at,\n            ai_analysis=ai_analysis,\n            url_analysis=url_analysis_section,\n        )\n        \n        return response\n\n\ndef _build_ai_analysis(\n    gemini_result: dict | None,\n    gemini_result_obj: object | None = None,\n) -> dict:\n    \"\"\"Build the AI analysis section for the response.\"\"\"\n    if gemini_result and gemini_result.get(\"status\") == \"completed\" and gemini_result_obj:\n        return {\n            \"status\": \"completed\",\n            \"provider\": \"gemini\",\n            \"model\": gemini_result.get(\"model\", \"unknown\"),\n            \"result\": {\n                \"is_suspicious\": gemini_result_obj.is_suspicious,\n                \"risk_level\": gemini_result_obj.risk_level,\n                \"category\": gemini_result_obj.category,\n                \"summary\": gemini_result_obj.summary,\n                \"indicators\": [\n                    {\"name\": ind[\"name\"], \"severity\": ind[\"severity\"], \"explanation\": ind[\"description\"]}\n                    for ind in gemini_result_obj.indicators\n                ],\n                \"recommendations\": gemini_result_obj.recommendations,\n                \"confidence\": gemini_result_obj.confidence,\n            },\n        }\n    elif gemini_result and gemini_result.get(\"status\") == \"failed\":\n        return {\n            \"status\": \"unavailable\",\n            \"provider\": \"gemini\",\n            \"model\": gemini_result.get(\"model\", \"unknown\"),\n            \"result\": None,\n        }\n    else:\n        return {\n            \"status\": \"unavailable\",\n            \"provider\": \"gemini\",\n            \"model\": None,\n            \"result\": None,\n        }\n\n\ndef _build_url_analysis(url_analysis: dict | None) -> dict | None:\n    \"\"\"Build the URL analysis section for the response.\"\"\"\n    if not url_analysis:\n        return None\n    \n    return {\n        \"status\": url_analysis.get(\"status\", \"unavailable\"),\n        \"urls_found\": url_analysis.get(\"urls_found\", 0),\n        \"results\": url_analysis.get(\"url_results\", []),\n        \"overall_risk_score\": url_analysis.get(\"overall_risk_score\", 0),\n        \"overall_risk_level\": url_analysis.get(\"overall_risk_level\", \"Low\"),\n        \"overall_category\": url_analysis.get(\"overall_category\", \"No URL\"),\n        \"merged_recommendations\": url_analysis.get(\"merged_recommendations\", []),\n        \"summary\": url_analysis.get(\"summary\", \"\"),\n    }\n\n\n@router.post(\n    \"/analyze\",\n    response_model=DetectionErrorResponse,\n    status_code=422,\n    summary=\"Detection validation error handling\",\n    description=\"Handles Pydantic validation errors for the detection endpoint.\",\n)\nasync def analyze_validation_error(\n    request: DetectionRequest,\n) -> DetectionErrorResponse:\n    \"\"\"Placeholder endpoint for validation error documentation.\"\"\"\n    return DetectionErrorResponse(\n        detail=\"Validation error occurred\",\n        path=\"/api/v1/detect/analyze\",\n    )\n\n# Extend supported content types\nSUPPORTED_CONTENT_TYPES = [\"sms\", \"whatsapp\", \"payment_request\", \"general\", \"url\"]
+"""Detection analysis and scan history API routes."""
+from __future__ import annotations
+
+import asyncio
+import logging
+from datetime import datetime, timezone
+from math import ceil
+from typing import Any, Optional
+from urllib.parse import urlsplit
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import and_, case, delete, func, or_, select
+from sqlalchemy.orm import Session
+
+from app.core.dependencies import get_current_user, get_db_session
+from app.models.scan import Scan
+from app.models.user import User
+from app.schemas.history import (
+    HistoryDeleteResponse,
+    HistoryItem,
+    HistoryListResponse,
+    HistoryPagination,
+    ScanDetailResponse,
+)
+from app.schemas.detection import DetectionRequest, DetectionResponse
+from app.services.detection.gemini_service import GeminiService, is_gemini_configured
+from app.services.detection.hybrid_scorer import HybridScorer
+from app.services.detection.risk_scorer import RiskScorer
+from app.services.detection.rule_detector import RuleDetector
+from app.services.detection.url_detector import URLDetector
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(tags=["detection"])
+
+ALLOWED_CONTENT_TYPES = {"sms", "whatsapp", "payment_request", "url", "general"}
+ALLOWED_RISK_LEVELS = {"low", "medium", "high", "critical"}
+ALLOWED_SORT_BY = {"created_at", "risk_score"}
+ALLOWED_SORT_ORDER = {"asc", "desc"}
+
+RISK_PRIORITY = {"low": 1, "medium": 2, "high": 3, "critical": 4}
+
+
+def _normalize_risk_level(level: Optional[str]) -> Optional[str]:
+    if not level:
+        return None
+    value = level.strip().lower()
+    mapping = {"low": "Low", "medium": "Medium", "high": "High", "critical": "Critical"}
+    return mapping.get(value)
+
+
+def _safe_int(value: Any, default: int = 0) -> int:
+    try:
+        if value is None:
+            return default
+        return int(value)
+    except Exception:
+        return default
+
+
+def _redact_url(url: str) -> str:
+    """Return a display-safe URL with query values redacted.
+
+    Host, path and parameter names are preserved for explainability. Parameter
+    values may contain tokens, OTPs or credentials and are never returned.
+    """
+    try:
+        parts = urlsplit(url)
+    except Exception:
+        return "[invalid-url]"
+
+    if not parts.scheme or not parts.netloc:
+        return "[invalid-url]"
+
+    redacted = f"{parts.scheme}://{parts.netloc}{parts.path or '/'}"
+    if parts.query:
+        names = []
+        for chunk in parts.query.split("&"):
+            name = chunk.split("=", 1)[0]
+            if name:
+                names.append(f"{name}=[redacted]")
+        if names:
+            redacted += "?" + "&".join(names)
+    return redacted[:300]
+
+
+def _build_ai_analysis(
+    gemini_result: Optional[dict[str, Any]],
+    ai_status: str,
+) -> dict[str, Any]:
+    """Build the ``ai_analysis`` response section.
+
+    A result is only reported as completed when both the overall status and the
+    provider result are present. Anything else is reported as unavailable so the
+    client never treats missing AI analysis as a completed assessment.
+    """
+    completed = (
+        ai_status == "completed"
+        and isinstance(gemini_result, dict)
+        and gemini_result.get("status") == "completed"
+        and gemini_result.get("result") is not None
+    )
+    if not completed:
+        return {
+            "status": "unavailable",
+            "provider": "gemini",
+            "model": (gemini_result or {}).get("model"),
+            "result": None,
+        }
+
+    result = gemini_result.get("result")
+    if hasattr(result, "model_dump"):
+        result = result.model_dump()
+
+    return {
+        "status": "completed",
+        "provider": "gemini",
+        "model": gemini_result.get("model"),
+        "result": result,
+    }
+
+
+async def _analyze_with_gemini(content: str, content_type: str) -> Optional[dict[str, Any]]:
+    """Run Gemini analysis off the event loop, with a hard wall-clock bound."""
+    if not is_gemini_configured():
+        return None
+
+    service = GeminiService()
+    if not service.is_available():
+        return None
+
+    try:
+        return await asyncio.wait_for(
+            asyncio.to_thread(service.analyze, content, content_type),
+            timeout=35.0,
+        )
+    except asyncio.TimeoutError:
+        logger.warning("Gemini analysis timed out")
+        return None
+    except Exception as exc:  # noqa: BLE001 - AI failure must never break rules
+        logger.warning("Gemini analysis failed: %s", type(exc).__name__)
+        return None
+
+
+def _run_url_analysis(content: str, content_type: str) -> dict[str, Any]:
+    """Run passive URL analysis and return a normalized result."""
+    detector = URLDetector()
+    result = detector.detect_urls_in_message(content)
+
+    if content_type == "url" and result.get("urls_found", 0) == 0:
+        single = detector.analyze_url(content.strip())
+        hostname = single.get("hostname") or ""
+        if not hostname or ('.' not in hostname and not single.get("indicators")):
+            raise HTTPException(
+                status_code=422,
+                detail="Invalid URL. Provide a full URL with a hostname, for example https://example.com.",
+            )
+        return {
+            "urls_found": 1,
+            "url_results": [single],
+            "overall_risk_score": single["risk_score"],
+            "overall_risk_level": single["risk_level"],
+            "overall_category": single["category"],
+            "merged_recommendations": single["recommendations"],
+            "summary": single["summary"],
+        }
+
+    return result
+
+
+def _url_indicators(url_analysis: dict[str, Any]) -> list[dict[str, Any]]:
+    """Flatten per-URL indicators into response indicators with redacted URLs."""
+    flattened: list[dict[str, Any]] = []
+    for url_result in url_analysis.get("url_results", []):
+        safe_url = _redact_url(url_result.get("url", ""))
+        for indicator in url_result.get("indicators", []):
+            flattened.append(
+                {
+                    "rule_id": None,
+                    "name": indicator.get("name", "URL indicator"),
+                    "category": url_result.get("category", "Suspicious Link"),
+                    "severity": indicator.get("severity", "medium"),
+                    "description": indicator.get("description", ""),
+                    "source": "url_based",
+                    "url": safe_url,
+                }
+            )
+    return flattened
+
+
+def _merge_unique(items: list[str]) -> list[str]:
+    merged: list[str] = []
+    seen: set[str] = set()
+    for item in items:
+        text = str(item).strip()
+        if not text:
+            continue
+        key = text.lower()
+        if key not in seen:
+            seen.add(key)
+            merged.append(text)
+    return merged
+
+
+@router.post("/detect/analyze", response_model=DetectionResponse)
+async def analyze(
+    request: DetectionRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db_session),
+) -> DetectionResponse:
+    content_type = (request.content_type or "general").strip().lower()
+    if content_type not in ALLOWED_CONTENT_TYPES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Unsupported content type. Allowed: {sorted(ALLOWED_CONTENT_TYPES)}",
+        )
+
+    detector = RuleDetector()
+    analysis = detector.detect(request.content, content_type=content_type)
+    if not isinstance(analysis, dict):
+        analysis = {}
+
+    matched_rule_names = analysis.get("matched_rule_names") or []
+    scorer = RiskScorer()
+    try:
+        score_result = scorer.calculate_score(matched_rule_names)
+    except Exception:
+        logger.exception("Rule scoring failed")
+        score_result = {"total_score": 0, "risk_level": "Low", "category": "General Scam"}
+
+    rule_score = _safe_int(score_result.get("total_score", 0), 0)
+    rule_level = _normalize_risk_level(score_result.get("risk_level")) or "Low"
+    category = score_result.get("category") or "General Scam"
+
+    indicators: list[dict[str, Any]] = []
+    for name in matched_rule_names:
+        indicators.append(
+            {
+                "rule_id": None,
+                "name": name,
+                "category": (analysis.get("categories") or {}).get(name, ""),
+                "severity": (analysis.get("severities") or {}).get(name, ""),
+                "description": (analysis.get("explanations") or {}).get(name, ""),
+                "source": "rule_based",
+            }
+        )
+
+    recommendations = analysis.get("recommendations") or []
+    if not isinstance(recommendations, list):
+        recommendations = []
+
+    # Passive URL analysis. The rule engine stays the base score; when URL
+    # analysis is more severe, the URL score is used because an explicit URL
+    # submitted for analysis must not come back as zero-risk just because no
+    # message rule matched.
+    url_analysis = _run_url_analysis(request.content, content_type)
+    url_score = _safe_int(url_analysis.get("overall_risk_score", 0), 0)
+    url_level = _normalize_risk_level(url_analysis.get("overall_risk_level")) or "Low"
+    url_indicators = _url_indicators(url_analysis)
+
+    base_score = max(rule_score, url_score)
+    base_level = rule_level
+    if url_score > rule_score:
+        base_level = url_level
+        category = url_analysis.get("overall_category") or category
+
+    indicators.extend(url_indicators)
+    recommendations.extend(url_analysis.get("merged_recommendations") or [])
+
+    gemini_result = await _analyze_with_gemini(request.content, content_type)
+    ai_status = "completed" if gemini_result and gemini_result.get("status") == "completed" else "unavailable"
+    ai_analysis = _build_ai_analysis(gemini_result, ai_status)
+
+    final_score = base_score
+    final_level = base_level
+    analysis_type = "rule_and_url" if url_indicators else "rule_based_only"
+    summary = (
+        f"Detected {len(indicators)} indicator(s) associated with potential fraud patterns."
+        if indicators
+        else "No strong fraud indicators were detected in the submitted content."
+    )
+    summary += f" URL analysis checked {url_analysis.get('urls_found', 0)} URL(s)."
+
+    # Gemini is merged only when the provider returned a validated result.
+    # HybridScorer uses the documented 60/40 weights and falls back cleanly.
+    if ai_analysis["status"] == "completed":
+        hybrid = HybridScorer().score(
+            rule_score=base_score,
+            rule_risk_level=base_level,
+            rule_category=category,
+            rule_indicators=indicators,
+            rule_recommendations=recommendations,
+            gemini_result=gemini_result,
+        )
+        final_score = _safe_int(hybrid.get("hybrid_score", final_score), final_score)
+        final_level = _normalize_risk_level(hybrid.get("risk_level")) or final_level
+        category = hybrid.get("category") or category
+        indicators = hybrid.get("indicators") or indicators
+        recommendations = hybrid.get("recommendations") or recommendations
+        analysis_type = hybrid.get("analysis_type") or "hybrid"
+        summary = hybrid.get("summary") or summary
+
+    recommendations = _merge_unique([str(item) for item in recommendations])[:10]
+    if not recommendations:
+        recommendations = [
+            "Do not share your OTP or UPI PIN with anyone.",
+            "Verify the request through your bank's official app or website.",
+        ]
+
+    created_at_dt = datetime.now(timezone.utc)
+    scan = Scan(
+        user_id=current_user.id,
+        content_type=content_type,
+        risk_score=final_score,
+        risk_level=final_level,
+        category=category,
+        summary=summary[:500],
+        indicators=indicators,
+        recommendations=recommendations,
+        content_hash=None,
+    )
+    db.add(scan)
+    db.commit()
+    db.refresh(scan)
+
+    return DetectionResponse(
+        success=True,
+        scan_id=str(scan.id),
+        analysis_type=analysis_type,
+        risk_score=final_score,
+        risk_level=final_level,
+        category=category,
+        summary=summary,
+        indicators=indicators,
+        recommendations=recommendations,
+        created_at=created_at_dt.isoformat(),
+        ai_analysis=ai_analysis,
+    )
+
+
+def _scan_overview(db: Session, user_id: int) -> dict[str, Any]:
+    """Return overview counts in a single aggregate query."""
+    suspicious_levels = ("medium", "high", "critical")
+    row = db.execute(
+        select(
+            func.count(Scan.id),
+            func.coalesce(
+                func.sum(
+                    case(
+                        (func.lower(Scan.risk_level).in_(suspicious_levels), 1),
+                        else_=0,
+                    )
+                ),
+                0,
+            ),
+            func.coalesce(
+                func.sum(
+                    case(
+                        (func.lower(Scan.risk_level) == "critical", 1),
+                        else_=0,
+                    )
+                ),
+                0,
+            ),
+            func.max(Scan.created_at),
+        ).where(Scan.user_id == user_id)
+    ).one()
+
+    total, suspicious, critical, most_recent = row
+    return {
+        "total_scans": int(total or 0),
+        "suspicious_scans": int(suspicious or 0),
+        "critical_scans": int(critical or 0),
+        "most_recent_scan_date": most_recent.isoformat() if most_recent else None,
+    }
+
+
+@router.get("/detect/history", response_model=HistoryListResponse)
+async def get_scan_history(
+    page: int = Query(1, ge=1),
+    limit: int = Query(10, ge=1, le=100),
+    risk_level: Optional[str] = Query(default=None),
+    content_type: Optional[str] = Query(default=None),
+    category: Optional[str] = Query(default=None),
+    start_date: Optional[str] = Query(default=None),
+    end_date: Optional[str] = Query(default=None),
+    search: Optional[str] = Query(default=None, max_length=200),
+    sort_by: str = Query(default="created_at"),
+    sort_order: str = Query(default="desc"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db_session),
+) -> HistoryListResponse:
+    if sort_by not in ALLOWED_SORT_BY:
+        raise HTTPException(status_code=422, detail="Invalid sort_by")
+    if sort_order not in ALLOWED_SORT_ORDER:
+        raise HTTPException(status_code=422, detail="Invalid sort_order")
+
+    filters = [Scan.user_id == current_user.id]
+
+    if risk_level:
+        normalized = risk_level.strip().lower()
+        if normalized not in ALLOWED_RISK_LEVELS:
+            raise HTTPException(status_code=422, detail="Invalid risk_level")
+        filters.append(func.lower(Scan.risk_level) == normalized)
+
+    if content_type:
+        normalized = content_type.strip().lower()
+        if normalized not in ALLOWED_CONTENT_TYPES:
+            raise HTTPException(status_code=422, detail="Invalid content_type")
+        filters.append(func.lower(Scan.content_type) == normalized)
+
+    if category:
+        filters.append(func.lower(Scan.category) == category.strip().lower())
+
+    def parse_dt(value: Optional[str], end: bool = False) -> Optional[datetime]:
+        if not value:
+            return None
+        try:
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=timezone.utc)
+            if end:
+                parsed = parsed.replace(hour=23, minute=59, second=59, microsecond=999999)
+            return parsed
+        except (ValueError, TypeError):
+            raise HTTPException(status_code=422, detail="Invalid date format")
+
+    start_dt = parse_dt(start_date, end=False)
+    end_dt = parse_dt(end_date, end=True)
+    if start_dt and end_dt and start_dt > end_dt:
+        raise HTTPException(status_code=422, detail="start_date must be before end_date")
+    if start_dt:
+        filters.append(Scan.created_at >= start_dt)
+    if end_dt:
+        filters.append(Scan.created_at <= end_dt)
+
+    if search:
+        term = f"%{search.strip().lower()}%"
+        filters.append(
+            or_(
+                func.lower(func.coalesce(Scan.content_type, "")).like(term),
+                func.lower(func.coalesce(Scan.risk_level, "")).like(term),
+                func.lower(func.coalesce(Scan.category, "")).like(term),
+                func.lower(func.coalesce(Scan.summary, "")).like(term),
+            )
+        )
+
+    total = db.execute(select(func.count()).select_from(Scan).where(and_(*filters))).scalar_one() or 0
+
+    sort_col = Scan.created_at if sort_by == "created_at" else Scan.risk_score
+    order_expr = sort_col.asc() if sort_order == "asc" else sort_col.desc()
+
+    stmt = (
+        select(Scan)
+        .where(and_(*filters))
+        .order_by(order_expr, Scan.id.desc())
+        .offset((page - 1) * limit)
+        .limit(limit)
+    )
+    rows = db.execute(stmt).scalars().all()
+
+    items = [
+        HistoryItem(
+            id=scan.id,
+            content_type=scan.content_type,
+            risk_score=scan.risk_score,
+            risk_level=scan.risk_level,
+            category=scan.category,
+            summary=scan.summary,
+            created_at=scan.created_at,
+        )
+        for scan in rows
+    ]
+    total_pages = ceil(total / limit) if total else 0
+
+    return HistoryListResponse(
+        success=True,
+        items=items,
+        pagination=HistoryPagination(
+            page=page,
+            limit=limit,
+            total=int(total),
+            total_pages=int(total_pages),
+        ),
+        overview=_scan_overview(db, current_user.id),
+    )
+
+
+@router.get("/detect/history/{scan_id}", response_model=ScanDetailResponse)
+async def get_scan_detail(
+    scan_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db_session),
+) -> ScanDetailResponse:
+    scan = db.execute(
+        select(Scan).where(Scan.id == scan_id, Scan.user_id == current_user.id)
+    ).scalar_one_or_none()
+    if scan is None:
+        # Do not reveal whether another user's scan exists.
+        raise HTTPException(status_code=404, detail="Scan not found")
+
+    indicators = scan.indicators if isinstance(scan.indicators, list) else []
+    sources = {
+        str(item.get("source"))
+        for item in indicators
+        if isinstance(item, dict) and item.get("source")
+    }
+    has_gemini = "gemini" in sources
+    has_url = "url_based" in sources
+    analysis_type = "hybrid" if has_gemini and (has_url or indicators) else "rule_based_only"
+    if has_url and not has_gemini:
+        analysis_type = "rule_and_url"
+
+    data = {
+        "id": scan.id,
+        "content_type": scan.content_type,
+        "risk_score": scan.risk_score,
+        "risk_level": scan.risk_level,
+        "category": scan.category,
+        "summary": scan.summary,
+        "indicators": indicators,
+        "recommendations": scan.recommendations if isinstance(scan.recommendations, list) else [],
+        "analysis_type": analysis_type,
+        "created_at": scan.created_at.isoformat() if scan.created_at else None,
+        "rule_based_status": "completed",
+        "gemini_status": "completed" if has_gemini else "unavailable",
+        "url_status": "completed" if has_url else "not_applicable",
+    }
+    return ScanDetailResponse(success=True, scan=data)
+
+
+@router.delete("/detect/history", response_model=HistoryDeleteResponse)
+async def delete_scan_history(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db_session),
+) -> HistoryDeleteResponse:
+    result = db.execute(delete(Scan).where(Scan.user_id == current_user.id))
+    db.commit()
+    deleted = result.rowcount or 0
+    return HistoryDeleteResponse(success=True, deleted=int(deleted))

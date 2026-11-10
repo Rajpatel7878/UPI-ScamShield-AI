@@ -1,5 +1,6 @@
-import { X } from 'lucide-react'
+import { LogOut, X } from 'lucide-react'
 import { Link, NavLink as RouterNavLink } from 'react-router-dom'
+import { useAuth } from '../../context/AppContext.jsx'
 import { APP_NAV_ITEMS } from '../../config/appNavigation.js'
 import { cn } from '../../utils/cn.js'
 import { BrandLogo } from '../common/BrandLogo.jsx'
@@ -23,6 +24,8 @@ export function SidebarContent({
   onClose,
   closeRef,
 }) {
+  const { user, isAuthenticated, logout } = useAuth()
+
   return (
     <div className="flex h-full min-h-0 w-full flex-col">
       <div
@@ -100,25 +103,53 @@ export function SidebarContent({
       </nav>
 
       <div className="shrink-0 border-t border-white/5 p-3">
-        <Link
-          to="/login"
-          onClick={onNavigate}
-          className={cn(
-            'group relative flex items-center gap-3 rounded-lg p-2 transition-colors duration-200 hover:bg-white/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-400',
-            collapsed && 'justify-center',
-          )}
-        >
-          <UserAvatar name="Guest" size="sm" />
-          <span className={cn('min-w-0', collapsed && 'sr-only')}>
-            <span className="block truncate text-sm font-medium text-ink">
-              Guest session
+        {isAuthenticated ? (
+          <div
+            className={cn(
+              'flex items-center gap-2 rounded-lg p-2',
+              collapsed && 'justify-center',
+            )}
+          >
+            {!collapsed && <UserAvatar name={user?.name || 'User'} size="sm" />}
+            <span className={cn('min-w-0 flex-1', collapsed && 'sr-only')}>
+              <span className="block truncate text-sm font-medium text-ink">
+                {user?.name || 'Signed in'}
+              </span>
+              <span className="block truncate text-[11px] text-slate-500">
+                {user?.email}
+              </span>
             </span>
-            <span className="block truncate text-[11px] text-slate-500">
-              Sign in planned
+            <button
+              type="button"
+              onClick={logout}
+              aria-label="Sign out"
+              title="Sign out"
+              className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-white/5 hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-400"
+            >
+              <LogOut className="size-4" aria-hidden="true" />
+            </button>
+          </div>
+        ) : (
+          <Link
+            to="/login"
+            onClick={onNavigate}
+            className={cn(
+              'group relative flex items-center gap-3 rounded-lg p-2 transition-colors duration-200 hover:bg-white/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-400',
+              collapsed && 'justify-center',
+            )}
+          >
+            <UserAvatar name="Guest" size="sm" />
+            <span className={cn('min-w-0', collapsed && 'sr-only')}>
+              <span className="block truncate text-sm font-medium text-ink">
+                Guest session
+              </span>
+              <span className="block truncate text-[11px] text-slate-500">
+                Sign in
+              </span>
             </span>
-          </span>
-          {collapsed && <CollapsedTooltip>Guest session</CollapsedTooltip>}
-        </Link>
+            {collapsed && <CollapsedTooltip>Sign in</CollapsedTooltip>}
+          </Link>
+        )}
       </div>
     </div>
   )

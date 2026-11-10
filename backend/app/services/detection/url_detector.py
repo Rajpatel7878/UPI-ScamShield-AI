@@ -1,1 +1,443 @@
-"""URL detector for the URL and phishing detection engine.\n\nAnalyzes URLs found in messages for suspicious indicators, performs brand\nimpersonation checks, and computes a URL risk score that integrates with\nthe existing hybrid detection architecture from Phases 10-12.\n\nKeep URL analysis modular and separate from the existing message detector.\nThe service accepts a standalone URL, a message containing URLs, or a URL\nextracted from an SMS or WhatsApp message.\n\"\"\"\nfrom __future__ import annotations\n\nimport logging\nfrom typing import Any\nfrom typing import Dict\nfrom typing import List\nfrom typing import Optional\nfrom typing import Tuple\n\nfrom .url_parser import extract_urls, normalize_url, is_ip_based_hostname, is_shortened_url, get_hostname, get_domain\nfrom .url_rules import (\n    get_all_rules,\n    get_rules_by_category,\n    SCORE_CONTRIBUTION_MAP,\n    SEVERITY_MAP,\n    validate_rule_severity,\n    CATEGORY_GROUPS,\n)\nfrom .domain_analyzer import analyze_domain, get_category_priority\n\n\nlogger = logging.getLogger(__name__)\n\n\n# --- URL Risk Scoring Weights (per Phase 13 spec) ---\n\n# Initial weighted indicator approach - avoid duplicate findings and cap at 100\nURL_INDICATOR_WEIGHTS: dict[str, int] = {\n    \"embedded_credentials\": 30,\n    \"ip_based_hostname\": 20,\n    \"strong_brand_impersonation\": 30,\n    \"punycode_homograph\": 20,\n    \"suspicious_shortener\": 10,\n    \"unusual_port\": 15,\n    \"excessive_length\": 10,\n    \"excessive_subdomains\": 10,\n    \"suspicious_query\": 15,\n    \"misleading_brand_path\": 15,\n}\n\n# Cap the total URL score at 100\nURL_SCORE_CAP = 100\n\n\nclass URLDetector:\n    \"\"\"Main URL detector that orchestrates URL analysis.\n    \n    Responsibilities:\n    - Extract URLs from messages\n    - Analyze each URL for suspicious indicators\n    - Compute a URL risk score\n    - Merge indicators across multiple URLs\n    - Integrate with Gemini AI for contextual analysis (Phase 11)\n    - Provide explainable results with recommendations\n    \"\"\"\n    \n    def __init__(self) -> None:\n        self._rules = get_all_rules()\n        self._scorer = None  # Lazy-initialized HybridScorer if needed\n    \n    def detect_urls(self, content: str) -> list[dict[str, Any]]:\n        \"\"\"Extract all URLs from the given content.\n        \n        Args:\n            content: The text message to search for URLs.\n        \n        Returns:\n            List of extracted URL dicts with original form, normalized form,\n            and position information.\n        \"\"\"\n        if not content:\n            return []\n        return extract_urls(content)\n    \n    def analyze_url(self, url: str) -> dict[str, Any]:\n        \"\"\"Analyze a single URL for suspicious phishing indicators.\n        \n        Performs all explainable checks and returns a structured result.\n        \n        Args:\n            url: The URL to analyze.\n        \n        Returns:\n            Dict with analysis results:\n                - hostname: extracted hostname\n                - domain: registered domain\n                - risk_score: URL-Specific risk score (0-100)\n                - risk_level: risk level (low/medium/high/critical)\n                - category: primary concern category\n                - indicators: list of detected indicators\n                - summary: human-readable summary\n                - recommendations: safety recommendations\n        \"\"\"\n        if not url:\n            return self._empty_result(\"\")\n        \n        # Normalize the URL for analysis (doesn't modify original)\n        normalized = normalize_url(url)\n        hostname = get_hostname(normalized)\n        domain = get_domain(hostname) if hostname else None\n        \n        # Analyze the domain using the domain analyzer\n        domain_result = analyze_domain(hostname) if hostname else {\n            \"indicators\": [],\n            \"risk_level\": \"low\",\n            \"category\": \"No Domain\",\n            \"summary\": \"\",\n        }\n        \n        # Extract indicators from domain analysis\n        indicators: list[dict[str, Any]] = list(domain_result[\"indicators\"])\n        \n        # Additional URL-specific checks\n        # 1. IP-based hostname\n        if is_ip_based_hostname(normalized) and not any(i['name'] == 'IP-based Hostname' for i in indicators):\n            indicators.append({\n                \"name\": \"IP-based Hostname\",\n                \"severity\": \"high\",\n                \"description\": \"The URL hostname is an IP address rather than a domain name.\",\n            })\n        \n        # 2. URL shortener\n        if is_shortened_url(normalized) and not any(i['name'] == 'URL Shortener' for i in indicators):\n            indicators.append({\n                \"name\": \"URL Shortener\",\n                \"severity\": \"medium\",\n                \"description\": \"The URL uses a known URL shortener service.\",\n            })\n        \n        # 3. Unusual port\n        if has_unusual_port(normalized) and not any(i['name'] == 'Unusual Port' for i in indicators):\n            indicators.append({\n                \"name\": \"Unusual Port\",\n                \"severity\": \"medium\",\n                \"description\": \"The URL uses a port outside common 80, 443, 8080.\",\n            })\n        \n        # 4. Punycode / homograph\n        if has_punycode(normalized) and not any(i['name'] == 'Punycode / Homograph' for i in indicators):\n            indicators.append({\n                \"name\": \"Punycode / Homograph\",\n                \"severity\": \"medium\",\n                \"description\": \"The URL hostname contains punycode encoding (xn--).\",\n            })\n        \n        # 5. Embedded credentials\n        if has_embeded_credentials(normalized) and not any(i['name'] == 'Embedded Credentials' for i in indicators):\n            indicators.append({\n                \"name\": \"Embedded Credentials\",\n                \"severity\": \"critical\",\n                \"description\": \"The URL contains embedded credentials in query parameters.\",\n            })\n        \n        # 6. Suspicious query parameters\n        if has_suspicious_query(normalized) and not any(i['name'] == 'Suspicious Query Parameters' for i in indicators):\n            indicators.append({\n                \"name\": \"Suspicious Query Parameters\",\n                \"severity\": \"medium\",\n                \"description\": \"The URL query string contains phishing-related terms.\",\n            })\n        \n        # 7. Excessive subdomains\n        if has_excessive_subdomains(normalized) and not any(i['name'] == 'Excessive Subdomains' for i in indicators):\n            indicators.append({\n                \"name\": \"Excessive Subdomains\",\n                \"severity\": \"medium\",\n                \"description\": \"The URL hostname has 3+ subdomain levels.\",\n            })\n        \n        # 8. Excessive length\n        if len(normalized) > 200 and not any(i['name'] == 'Excessively Long URL' for i in indicators):\n            indicators.append({\n                \"name\": \"Excessively Long URL\",\n                \"severity\": \"low\",\n                \"description\": \"The URL string exceeds 200 characters.\",\n            })\n        \n        # 9. Misleading path\n        # Check if path contains misleading terms (simple heuristic)\n        path_start = normalized.find('/')\n        if path_start > 0 and path_start < len(normalized) - 1:\n            path_part = normalized[path_start:]\n            misleading_terms = ['secure', 'bank', 'login', 'verify', 'admin']\n            if any(term in path_part.lower() for term in misleading_terms):\n                # Check if this is misleading by being brand-related but unrelated\n                if not any(i['name'] == 'Misleading URL Path' for i in indicators):\n                    indicators.append({\n                        \"name\": \"Misleading URL Path\",\n                        \"severity\": \"medium\",\n                        \"description\": f\"The URL path contains terms like '{', '.join(misleading_terms)}' commonly used to mislead.\",\n                    })\n        \n        # 10. Unusual TLD\n        domain = get_domain(hostname) if hostname else None\n        if domain:\n            tld = domain.split('.')[-1].lower() if domain else ''\n            if tld and tld not in {'com', 'org', 'net', 'edu', 'gov', 'mil', 'int'} and len(tld) > 2:\n                if not any(i['name'] == 'Unusual TLD' for i in indicators):\n                    indicators.append({\n                        \"name\": \"Unusual TLD\",\n                        \"severity\": \"low\",\n                        \"description\": f\"The domain uses TLD '.{tld}', which is not among the most common.\",\n                    })\n        \n        # Compute URL risk score based on indicators\n        url_score = self._compute_url_score(indicators)\n        \n        # Determine risk level\n        risk_level = self._score_to_risk_level(url_score)\n        \n        # Determine category\n        category = self._determine_category(indicators)\n        \n        # Build recommendations\n        recommendations = self._build_recommendations(indicators)\n        \n        # Build summary\n        summary = self._build_summary(indicators, url_score, risk_level)\n        \n        return {\n            \"hostname\": normalized,\n            \"domain\": domain,\n            \"risk_score\": url_score,\n            \"risk_level\": risk_level,\n            \"category\": category,\n            \"indicators\": indicators,\n            \"recommendations\": recommendations,\n            \"summary\": summary,\n        }\n    \n    def _compute_url_score(self, indicators: list[dict[str, Any]]) -> int:\n        \"\"\"Compute the URL risk score from detected indicators.\"\"\"\n        total = 0\n        seen_categories: set[str] = set()\n        \n        for ind in indicators:\n            # Get the indicator name to look up weight\n            ind_name = ind.get('name', '')\n            weight = URL_INDICATOR_WEIGHTS.get(ind_name, 0)\n            total += weight\n            \n            # Track category for deduplication\n            cat = ind.get('category', '')\n            if cat and cat not in seen_categories:\n                seen_categories.add(cat)\n        \n        # Cap at 100\n        return min(total, URL_SCORE_CAP)\n    \n    def _score_to_risk_level(self, score: int) -> str:\n        \"\"\"Convert a numeric score to a risk level band.\"\"\"\n        if score >= 80:\n            return \"Critical\"\n        elif score >= 60:\n            return \"High\"\n        elif score >= 30:\n            return \"Medium\"\n        else:\n            return \"Low\"\n    \n    def _determine_category(self, indicators: list[dict[str, Any]]) -> str:\n        \"\"\"Determine the primary category from detected indicators.\"\"\"\n        if not indicators:\n            return \"Suspicious Link\"\n        \n        # Group indicators by category from rules\n        category_counts: dict[str, int] = {}\n        for ind in indicators:\n            cat = ind.get('category', 'Suspicious Link')\n            category_counts[cat] = category_counts.get(cat, 0) + 1\n        \n        if not category_counts:\n            return \"Suspicious Link\"\n        \n        # Return the category with most indicators\n        primary = max(category_counts, key=category_counts.get)\n        return primary if category_counts[primary] > 1 else \"Suspicious Link\"\n    \n    def _build_recommendations(self, indicators: list[dict[str, Any]]) -> list[str]:\n        \"\"\"Build safety recommendations from detected indicators.\"\"\"\n        recommendations: list[str] = []\n        seen: set[str] = set()\n        \n        # Prioritize critical indicators first\n        critical_indicators = [i for i in indicators if i.get('severity') == 'critical']\n        medium_indicators = [i for i in indicators if i.get('severity') == 'medium']\n        low_indicators = [i for i in indicators if i.get('severity') == 'low']\n        \n        # Critical indicators: immediate action\n        for ind in critical_indicators:\n            rec = self._critical_to_recommendation(ind['name'])\n            if rec and rec not in seen:\n                seen.add(rec)\n                recommendations.append(rec)\n        \n        # Medium indicators\n        for ind in medium_indicators:\n            rec = self._medium_to_recommendation(ind['name'])\n            if rec and rec not in seen:\n                seen.add(rec)\n                recommendations.append(rec)\n        \n        # Low indicators\n        for ind in low_indicators:\n            rec = self._low_to_recommendation(ind['name'])\n            if rec and rec not in seen:\n                seen.add(rec)\n                recommendations.append(rec)\n        \n        # General safety recommendation if we have any indicators\n        if indicators and not recommendations:\n            recommendations = [\n                \"Do not enter banking credentials from unknown URLs.\",\n                \"Verify the website through your bank's official app or website.\",\n            ]\n        \n        # Fallback if no indicators (shouldn't happen, but safety)\n        if not recommendations:\n            recommendations = [\n                \"Be cautious with unknown URLs.\",\n                \"Do not enter credentials from links in messages.\",\n            ]\n        \n        return recommendations[:10]  # Cap at 10\n    \n    def _critical_to_recommendation(self, indicator_name: str) -> Optional[str]:\n        \"\"\"Convert a critical indicator name to a safety recommendation.\"\"\"\n        mapping = {\n            \"Embedded Credentials\": \"Never enter credentials from a URL. Legitimate services never ask you to paste credentials from a link.\",\n        }\n        return mapping.get(indicator_name)\n    \n    def _medium_to_recommendation(self, indicator_name: str) -> Optional[str]:\n        \"\"\"Convert a medium indicator name to a safety recommendation.\"\"\"\n        mapping = {\n            \"IP-based Hostname\": \"Do not enter credentials. IP-based addresses are suspicious in context.\",\n            \"URL Shortener\": \"Do not click the link. Visit the service directly through your official app or website.\",\n            \"Unusual Port\": \"Verify the service legitimacy. Unusual ports can be used by both legitimate and illegitimate services.\",\n            \"Punycode / Homograph\": \"Be cautious of internationalized domain names. Verify the site through your official app or website.\",\n            \"Suspicious Query Parameters\": \"Do not enter credentials. Verify the request independently through your bank's official channel.\",\n            \"Excessive Subdomains\": \"Verify the website domain. Be cautious of URLs with many subdomain levels.\",\n            \"Suspicious Query Parameters\": \"Do not enter credentials. Verify the request independently through your bank's official channel.\",\n        }\n        return mapping.get(indicator_name)\n    \n    def _low_to_recommendation(self, indicator_name: str) -> Optional[str]:\n        \"\"\"Convert a low indicator name to a safety recommendation.\"\"\"\n        mapping = {\n            \"Excessively Long URL\": \"Be cautious. Hover over the link to inspect the full destination before clicking.\",\n            \"Unusual TLD\": \"Verify the website legitimacy. Unusual TLDs can be used by both legitimate and illegitimate sites.\",\n            \"Misleading URL Path\": \"Do not assume terms like 'secure' or 'bank' guarantee legitimacy. Verify the actual destination.\",\n        }\n        return mapping.get(indicator_name)\n    \n    def _build_summary(self, indicators: list[dict[str, Any]], score: int, risk_level: str) -> str:\n        \"\"\"Build a human-readable summary of the URL analysis.\"\"\"\n        if not indicators:\n            return f\"No suspicious indicators found in URL. Risk score: {score} ({risk_level}).\"\n        \n        critical_count = sum(1 for i in indicators if i.get('severity') == 'critical')\n        high_count = sum(1 for i in indicators if i.get('severity') == 'high')\n        medium_count = sum(1 for i in indicators if i.get('severity') == 'medium')\n        low_count = sum(1 for i in indicators if i.get('severity') == 'low')\n        \n        parts = []\n        if critical_count:\n            parts.append(f\"{critical_count} critical indicator\")\n        if high_count:\n            parts.append(f\"{high_count} high indicator\")\n        if medium_count:\n            parts.append(f\"{medium_count} medium indicator\")\n        if low_count:\n            parts.append(f\"{low_count} low indicator\")\n        \n        if not parts:\n            return f\"URL analysis found {len(indicators)} indicators. Risk score: {score} ({risk_level}).\"\n        \n        return f\"URL analysis found {len(indicators)} indicators ({', '.join(parts)}). Risk score: {score} ({risk_level}).\"\n    \n    def _empty_result(self, url: str) -> dict[str, Any]:\n        \"\"\"Return an empty result for empty or invalid URL.\"\"\"\n        return {\n            \"hostname\": url,\n            \"domain\": None,\n            \"risk_score\": 0,\n            \"risk_level\": \"Low\",\n            \"category\": \"No URL\",\n            \"indicators\": [],\n            \"recommendations\": [\n                \"Provide a URL to analyze for phishing indicators.\"\n            ],\n            \"summary\": \"No URL provided for analysis.\",\n        }\n\n\n# Integration with Gemini AI (Phase 11)\n# The detector can optionally call Gemini for contextual URL analysis\n# when the API key is configured, keeping the rule-based detector operational\n# if Gemini is unavailable.\n\n\ndef integrate_with_gemini(url: str, gemini_service: object | None = None) -> dict[str, Any] | None:\n    \"\"\"Optionally integrate URL analysis with Gemini AI.\n    \n    If gemini_service is provided and configured, calls Gemini for contextual\n    analysis of the URL. If Gemini is unavailable, the rule-based detector\n    results are returned unchanged.\n    \n    Args:\n        url: The URL to analyze.\n        gemini_service: Optional GeminiService instance.\n    \n    Returns:\n        Enhanced analysis dict with Gemini contributions, or None if Gemini\n        integration is not available.\n    \"\"\"\n    if gemini_service is None:\n        return None\n    \n    if not gemini_service.is_available():\n        return None\n    \n    # In a full implementation, we would call gemini_service.analyze()\n    # with a focused prompt about this specific URL.\n    # For Phase 13, we keep the rule-based detector operational independently.\n    # Gemini integration is optional and doesn't replace the rule-based detector.\n    return None\n\ndef detect_urls_in_message(content: str) -> dict[str, Any]:\n    \"\"\"Detect and analyze all URLs in a message.\n    \n    Main entry point for message-level URL analysis.\n    \n    Args:\n        content: The message text to analyze.\n    \n    Returns:\n        Dict with overall message-level URL analysis:\n            - urls_found: number of URLs found\n            - url_results: list of per-URL analysis results\n            - overall_risk_score: combined risk score from all URLs\n            - overall_risk_level: overall risk level\n            - overall_category: overall category\n            - merged_recommendations: merged safety recommendations\n            - summary: human-readable summary\n    \"\"\"\n    # Extract URLs from content\n    extracted_urls = extract_urls(content)\n    \n    if not extracted_urls:\n        return {\n            \"urls_found\": 0,\n            \"url_results\": [],\n            \"overall_risk_score\": 0,\n            \"overall_risk_level\": \"Low\",\n            \"overall_category\": \"No URL\",\n            \"merged_recommendations\": [\n                \"Be cautious with unknown URLs.\",\n                \"Do not enter credentials from links in messages.\",\n            ],\n            \"summary\": \"No URLs found in the message.\",\n        }\n    \n    # Analyze each URL\n    url_results: list[dict[str, Any]] = []\n    total_score = 0\n    \n    for url_data in extracted_urls:\n        original_url = url_data['url']\n        analysis = self.analyze_url(original_url)\n        url_results.append(analysis)\n        total_score += analysis['risk_score']\n    \n    # Deduplicate: don't double-count the same URL\n    # Use normalized URL as dedup key\n    seen_normalized: set[str] = set()\n    unique_results: list[dict[str, Any]] = []\n    for result in url_results:\n        norm_key = result['hostname'].lower() if result['hostname'] else ''\n        if norm_key not in seen_normalized:\n            seen_normalized.add(norm_key)\n            unique_results.append(result)\n            total_score += result['risk_score']\n    \n    # Compute overall risk level\n    overall_risk_level = \"Low\"\n    if total_score >= 80:\n        overall_risk_level = \"Critical\"\n    elif total_score >= 60:\n        overall_risk_level = \"High\"\n    elif total_score >= 30:\n        overall_risk_level = \"Medium\"\n    \n    # Merge recommendations from all URLs\n    all_recommendations: list[str] = []\n    rec_seen: set[str] = set()\n    for result in unique_results:\n        for rec in result.get('recommendations', []):\n            if rec not in rec_seen:\n                rec_seen.add(rec)\n                all_recommendations.append(rec)\n    \n    # Ensure minimum recommendations\n    if not all_recommendations:\n        all_recommendations = [\n            \"Be cautious with unknown URLs.\",\n            \"Do not enter credentials from links in messages.\",\n        ]\n    \n    # Overall category\n    if any(r.get('category') == 'Credential Theft' for r in unique_results):\n        overall_category = \"Credential Theft\"\n    elif any(r.get('category') == 'Brand Impersonation' for r in unique_results):\n        overall_category = \"Brand Impersonation\"\n    else:\n        overall_category = \"Suspicious Link\"\n    \n    # Summary\n    if len(unique_results) == 1:\n        summary = f\"1 URL found in message: {unique_results[0]['summary']}\"\n    else:\n        summary = f\"{len(unique_results)} URLs found in message.\"\n    \n    # Cap total score at 100\n    overall_risk_score = min(total_score, 100)\n    \n    return {\n        \"urls_found\": len(unique_results),\n        \"url_results\": unique_results,\n        \"overall_risk_score\": overall_risk_score,\n        \"overall_risk_level\": overall_risk_level,\n        \"overall_category\": overall_category,\n        \"merged_recommendations\": all_recommendations,\n        \"summary\": summary,\n    }\n
+"""URL detector for the URL and phishing detection engine.
+
+Analyzes URLs found in messages for suspicious indicators, performs brand
+impersonation checks, and computes a URL risk score. URL analysis is entirely
+passive: extracted URLs are never fetched, opened, or resolved, and redirects
+are never followed.
+"""
+from __future__ import annotations
+
+import logging
+from typing import Any, Optional
+
+from .url_parser import (
+    extract_urls,
+    get_domain,
+    get_hostname,
+    has_embedded_credentials,
+    has_excessive_subdomains,
+    has_punycode,
+    has_suspicious_query,
+    has_unusual_port,
+    is_ip_based_hostname,
+    is_shortened_url,
+    normalize_url,
+)
+from .domain_analyzer import analyze_domain
+
+logger = logging.getLogger(__name__)
+
+
+# --- URL Risk Scoring Weights (per Phase 13 spec) ---
+#
+# Indicator weights are keyed by the human-readable indicator names emitted by
+# this module and the domain analyzer. Each indicator name is counted once.
+URL_INDICATOR_WEIGHTS: dict[str, int] = {
+    "Embedded Credentials": 30,
+    "IP-based Hostname": 20,
+    "Brand Impersonation (Lookalike)": 30,
+    "Brand Name in Unrelated Domain": 20,
+    "URL Shortener": 10,
+    "Unusual Port": 15,
+    "Excessively Long URL": 10,
+    "Excessive Subdomains": 10,
+    "Suspicious Query Parameters": 15,
+    "Misleading URL Path": 15,
+    "Unusual TLD": 5,
+    "Punycode / Homograph": 20,
+    "HTTPS Misconception": 5,
+}
+
+# Cap the total URL score at 100.
+URL_SCORE_CAP = 100
+
+# URL risk bands intentionally differ from the message rule bands: a single
+# high-severity URL indicator (for example an IP-based host) is enough to label
+# the URL as High risk. This matches the Phase 13 requirements.
+URL_RISK_BANDS = {
+    "Critical": 80,
+    "High": 20,
+    "Medium": 10,
+    "Low": 0,
+}
+
+
+def _score_to_url_risk_level(score: int) -> str:
+    """Map a URL score to a risk level using the URL-specific bands."""
+    if score >= URL_RISK_BANDS["Critical"]:
+        return "Critical"
+    if score >= URL_RISK_BANDS["High"]:
+        return "High"
+    if score >= URL_RISK_BANDS["Medium"]:
+        return "Medium"
+    return "Low"
+
+
+class URLDetector:
+    """Orchestrates passive URL analysis and risk scoring."""
+
+    def detect_urls(self, content: str) -> list[dict[str, Any]]:
+        """Extract all URLs from the given content."""
+        if not content:
+            return []
+        return extract_urls(content)
+
+    def analyze_url(self, url: str) -> dict[str, Any]:
+        """Analyze a single URL for suspicious phishing indicators."""
+        if not url or not url.strip():
+            return self._empty_result("")
+
+        normalized = normalize_url(url)
+        if not normalized:
+            return self._empty_result("")
+
+        hostname = get_hostname(normalized) or ""
+        domain = get_domain(hostname) if hostname else None
+
+        domain_result = analyze_domain(hostname) if hostname else {
+            "indicators": [],
+            "risk_level": "low",
+            "category": "No Domain",
+            "summary": "",
+        }
+        indicators: list[dict[str, Any]] = list(domain_result["indicators"])
+
+        def add(name: str, severity: str, description: str) -> None:
+            if not any(item['name'] == name for item in indicators):
+                indicators.append(
+                    {"name": name, "severity": severity, "description": description}
+                )
+
+        if is_ip_based_hostname(normalized):
+            add(
+                "IP-based Hostname",
+                "high",
+                "The URL hostname is an IP address rather than a domain name.",
+            )
+
+        if is_shortened_url(normalized):
+            add(
+                "URL Shortener",
+                "medium",
+                "The URL uses a known URL shortener service.",
+            )
+
+        if has_unusual_port(normalized):
+            add(
+                "Unusual Port",
+                "medium",
+                "The URL uses a port outside the common 80, 443 and 8080 ports.",
+            )
+
+        if has_punycode(normalized):
+            add(
+                "Punycode / Homograph",
+                "medium",
+                "The URL hostname contains punycode encoding (xn--).",
+            )
+
+        if has_embedded_credentials(normalized):
+            add(
+                "Embedded Credentials",
+                "critical",
+                "The URL contains embedded credentials in query parameters.",
+            )
+
+        if has_suspicious_query(normalized):
+            add(
+                "Suspicious Query Parameters",
+                "medium",
+                "The URL query string contains phishing-related terms.",
+            )
+
+        if has_excessive_subdomains(normalized):
+            add(
+                "Excessive Subdomains",
+                "medium",
+                "The URL hostname has 3 or more subdomain levels.",
+            )
+
+        if len(normalized) > 200:
+            add(
+                "Excessively Long URL",
+                "low",
+                "The URL string exceeds 200 characters.",
+            )
+
+        # Inspect only the path component. Parsing the authority separately avoids
+        # treating the slashes in "http://" as a path.
+        value = normalized
+        if value.lower().startswith('https://'):
+            value = value[8:]
+        elif value.lower().startswith('http://'):
+            value = value[7:]
+        authority_and_rest = value.split('/', 1)
+        path = '/' + authority_and_rest[1] if len(authority_and_rest) == 2 else ''
+        path = path.split('?', 1)[0]
+        misleading_terms = ('secure', 'bank', 'login', 'verify', 'admin')
+        matched_terms = [term for term in misleading_terms if term in path.lower()]
+        if matched_terms:
+            add(
+                "Misleading URL Path",
+                "medium",
+                "The URL path contains terms commonly used to mislead users: "
+                + ', '.join(matched_terms)
+                + ".",
+            )
+
+        url_score = self._compute_url_score(indicators)
+        risk_level = _score_to_url_risk_level(url_score)
+        category = self._determine_category(indicators)
+        recommendations = self._build_recommendations(indicators)
+        summary = self._build_summary(indicators, url_score, risk_level)
+
+        return {
+            "url": normalized,
+            "hostname": hostname,
+            "domain": domain,
+            "risk_score": url_score,
+            "risk_level": risk_level,
+            "category": category,
+            "indicators": indicators,
+            "recommendations": recommendations,
+            "summary": summary,
+        }
+
+    def _compute_url_score(self, indicators: list[dict[str, Any]]) -> int:
+        """Compute the URL risk score, counting each indicator name once."""
+        total = 0
+        seen: set[str] = set()
+        for indicator in indicators:
+            name = indicator.get('name', '')
+            if not name or name in seen:
+                continue
+            seen.add(name)
+            total += URL_INDICATOR_WEIGHTS.get(name, 0)
+        return min(total, URL_SCORE_CAP)
+
+    def _determine_category(self, indicators: list[dict[str, Any]]) -> str:
+        """Determine the primary category from detected indicators."""
+        names = {ind.get('name') for ind in indicators}
+        if "Embedded Credentials" in names:
+            return "Credential Theft"
+        if any('Brand' in (name or '') for name in names):
+            return "Brand Impersonation"
+        return "Suspicious Link"
+
+    def _build_recommendations(self, indicators: list[dict[str, Any]]) -> list[str]:
+        """Build deduplicated safety recommendations from indicators."""
+        recommendations: list[str] = []
+        seen: set[str] = set()
+
+        for severity in ("critical", "high", "medium", "low"):
+            for indicator in indicators:
+                if indicator.get('severity') != severity:
+                    continue
+                recommendation = self._recommendation_for(indicator.get('name', ''))
+                if recommendation and recommendation not in seen:
+                    seen.add(recommendation)
+                    recommendations.append(recommendation)
+
+        if not recommendations:
+            recommendations = [
+                "Be cautious with unknown URLs.",
+                "Do not enter credentials from links in messages.",
+            ]
+
+        return recommendations[:10]
+
+    def _recommendation_for(self, name: str) -> Optional[str]:
+        """Return a safety recommendation for an indicator name."""
+        mapping = {
+            "Embedded Credentials": (
+                "Never enter credentials from a URL. Legitimate services never ask "
+                "you to paste credentials from a link."
+            ),
+            "IP-based Hostname": (
+                "Do not enter credentials. Verify the website through your bank's "
+                "official app or website."
+            ),
+            "Brand Impersonation (Lookalike)": (
+                "Do not enter credentials. Access the service directly through its "
+                "official app or website."
+            ),
+            "Brand Name in Unrelated Domain": (
+                "Verify the website domain independently through the brand's "
+                "official app or website."
+            ),
+            "URL Shortener": (
+                "Do not click the link. Visit the service directly through your "
+                "official app or website."
+            ),
+            "Unusual Port": (
+                "Verify the service legitimacy before entering any information."
+            ),
+            "Punycode / Homograph": (
+                "Be cautious of internationalized domain names. Verify the site "
+                "through its official app or website."
+            ),
+            "Suspicious Query Parameters": (
+                "Do not enter credentials. Verify the request independently through "
+                "your bank's official channel."
+            ),
+            "Excessive Subdomains": (
+                "Verify the website domain. Be cautious of URLs with many subdomain "
+                "levels."
+            ),
+            "Excessively Long URL": (
+                "Inspect the full destination before clicking; long URLs can hide "
+                "the real target."
+            ),
+            "Unusual TLD": (
+                "Verify the website legitimacy independently before sharing any "
+                "information."
+            ),
+            "Misleading URL Path": (
+                "Do not assume terms like 'secure' or 'bank' guarantee legitimacy. "
+                "Verify the actual destination."
+            ),
+        }
+        return mapping.get(name)
+
+    def _build_summary(
+        self,
+        indicators: list[dict[str, Any]],
+        score: int,
+        risk_level: str,
+    ) -> str:
+        """Build a human-readable summary of the URL analysis."""
+        if not indicators:
+            return (
+                f"No suspicious indicators found in URL. Risk score: {score} "
+                f"({risk_level})."
+            )
+
+        counts = {
+            severity: sum(1 for ind in indicators if ind.get('severity') == severity)
+            for severity in ("critical", "high", "medium", "low")
+        }
+        parts = [
+            f"{counts[severity]} {severity} indicator"
+            for severity in ("critical", "high", "medium", "low")
+            if counts[severity]
+        ]
+        return (
+            f"URL analysis found {len(indicators)} indicators "
+            f"({', '.join(parts)}). Risk score: {score} ({risk_level})."
+        )
+
+    def _empty_result(self, url: str) -> dict[str, Any]:
+        """Return an empty result for an empty or invalid URL."""
+        return {
+            "url": url,
+            "hostname": url,
+            "domain": None,
+            "risk_score": 0,
+            "risk_level": "Low",
+            "category": "No URL",
+            "indicators": [],
+            "recommendations": [
+                "Provide a URL to analyze for phishing indicators.",
+            ],
+            "summary": "No URL provided for analysis.",
+        }
+
+    def detect_urls_in_message(self, content: str) -> dict[str, Any]:
+        """Detect and analyze all unique URLs in a message."""
+        if not content:
+            return self._no_urls_result()
+
+        extracted = extract_urls(content)
+        if not extracted:
+            return self._no_urls_result()
+
+        seen: set[str] = set()
+        url_results: list[dict[str, Any]] = []
+        total_score = 0
+
+        for item in extracted:
+            key = normalize_url(item['url']).lower()
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            analysis = self.analyze_url(item['url'])
+            url_results.append(analysis)
+            total_score += analysis['risk_score']
+
+        if not url_results:
+            return self._no_urls_result()
+
+        overall_score = min(total_score, URL_SCORE_CAP)
+        overall_level = _score_to_url_risk_level(overall_score)
+
+        recommendations: list[str] = []
+        rec_seen: set[str] = set()
+        for result in url_results:
+            for recommendation in result.get('recommendations', []):
+                if recommendation not in rec_seen:
+                    rec_seen.add(recommendation)
+                    recommendations.append(recommendation)
+
+        if not recommendations:
+            recommendations = [
+                "Be cautious with unknown URLs.",
+                "Do not enter credentials from links in messages.",
+            ]
+
+        if any(r.get('category') == 'Credential Theft' for r in url_results):
+            overall_category = "Credential Theft"
+        elif any(r.get('category') == 'Brand Impersonation' for r in url_results):
+            overall_category = "Brand Impersonation"
+        else:
+            overall_category = "Suspicious Link"
+
+        if len(url_results) == 1:
+            summary = f"1 URL found in message. {url_results[0]['summary']}"
+        else:
+            summary = f"{len(url_results)} URLs found in message."
+
+        return {
+            "urls_found": len(url_results),
+            "url_results": url_results,
+            "overall_risk_score": overall_score,
+            "overall_risk_level": overall_level,
+            "overall_category": overall_category,
+            "merged_recommendations": recommendations,
+            "summary": summary,
+        }
+
+    def _no_urls_result(self) -> dict[str, Any]:
+        """Result used when a message contains no URLs."""
+        return {
+            "urls_found": 0,
+            "url_results": [],
+            "overall_risk_score": 0,
+            "overall_risk_level": "Low",
+            "overall_category": "No URL",
+            "merged_recommendations": [
+                "Be cautious with unknown URLs.",
+                "Do not enter credentials from links in messages.",
+            ],
+            "summary": "No URLs found in the message.",
+        }
+
+
+def detect_urls_in_message(content: str) -> dict[str, Any]:
+    """Backward-compatible module-level wrapper for message URL analysis."""
+    return URLDetector().detect_urls_in_message(content)
+
+
+def integrate_with_gemini(
+    url: str,
+    gemini_service: object | None = None,
+) -> dict[str, Any] | None:
+    """Optionally integrate URL analysis with Gemini AI.
+
+    Gemini is only used when explicitly provided and available; rule-based URL
+    analysis remains fully operational without it.
+    """
+    if gemini_service is None:
+        return None
+    if not gemini_service.is_available():
+        return None
+    return None

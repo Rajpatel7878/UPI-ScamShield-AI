@@ -2,572 +2,399 @@
 
 **Detect. Analyze. Protect.**
 
-AI-powered fraud detection and digital payment security.
+UPI ScamShield AI is a full-stack educational fraud-analysis application. It
+combines explainable rule-based detection, passive URL inspection and optional
+Google Gemini assistance to produce a risk score, indicators and practical
+safety recommendations for a suspicious message or link.
 
-> **Project status: Phase 2 — Design system.** Phases 1 and 2 are complete: the
-> working full-stack foundation plus a reusable, token-driven frontend design
-> system. The AI fraud detection engine is **not implemented yet** and is
-> planned for a later phase.
+> **Project status: Phase 17 complete.** The application is tested, hardened and
+> prepared for the Phase 18 deployment work. It is **not deployed yet**. Results
+> are heuristic risk assessments, not proof that a message is fraudulent, and
+> the project has not received a formal penetration test or security
+> certification.
 
 ---
 
-## 1. Introduction
+## 1. Features
 
-UPI ScamShield AI is a cybersecurity platform concept for the Unified Payments
-Interface (UPI) ecosystem in India. The end goal is a system that analyzes
-payment requests, messages, and transaction context to flag likely fraud before
-money leaves a user's account — and explains *why* a request looks suspicious.
+- Account registration and login with Argon2 password hashing and JWT sessions.
+- User-scoped scam detection for SMS, WhatsApp, payment requests, general text
+  and URLs.
+- Explainable rule engine with severity, category, description and source for
+  every indicator.
+- Passive URL analysis: no URL is ever opened, fetched or followed.
+- Optional Gemini analysis with strict output validation; rules still work when
+  Gemini is unavailable.
+- Scan history with filters, sorting, pagination, detail view and owner-only
+  data isolation.
+- Dashboard statistics and analytics with user-scoped aggregation.
+- Scam Awareness Center with guides, safety rules, emergency guidance, FAQ and
+  a knowledge quiz.
+- Responsive dark UI with keyboard-accessible navigation, focus handling,
+  reduced-motion support and labelled charts.
 
-This phase establishes a professional, maintainable development foundation so
-later phases can focus purely on the detection intelligence.
+## 2. Technology Stack
 
-## 2. Problem Statement
+| Area | Technology |
+| --- | --- |
+| Frontend | React 19, React Router 7, Vite 8, Tailwind CSS 4 |
+| UI | Lucide icons, Recharts |
+| HTTP | Axios |
+| Backend | Python 3.14, FastAPI 0.162, Uvicorn |
+| Validation | Pydantic 2 / pydantic-settings |
+| Database | SQLAlchemy 2.1 with SQLite by default (PostgreSQL supported by URL) |
+| Authentication | PyJWT (HS256 by default), Argon2 via passlib |
+| AI (optional) | Google Gemini through `google-genai` |
+| Backend tests | pytest + httpx |
 
-UPI fraud is fast, social, and hard to reverse. Attackers impersonate buyers,
-sellers, bank officials, or delivery agents; they send collect requests that
-debit the victim; they share fake payment screenshots; and they pressure users
-into approving transactions within seconds. Most users have no tooling that
-inspects a request and says, in plain language, "this looks like a scam."
+## 3. Architecture
 
-ScamShield AI aims to close that gap with an accessible, explainable risk
-assessment layer.
-
-## 3. Objectives
-
-Phase 1 objectives (delivered):
-
-- Establish a clean React + Vite frontend with routing, styling, and a service layer.
-- Establish a modular FastAPI backend with configuration and error handling.
-- Provide health-check endpoints for monitoring and integration testing.
-- Wire frontend → backend communication through environment variables and CORS.
-- Document setup, architecture, and the roadmap.
-
-Phase 2 objectives (delivered):
-
-- Define a token-driven visual identity (surfaces, brand, semantic colors, type scale, motion).
-- Ship a reusable component library with accessible, documented states.
-- Keep the component catalogue verifiable on an internal `/design-system` route.
-
-Later-phase objectives are listed in the [roadmap](#12-development-roadmap) and
-are explicitly marked as not implemented.
-
-## 4. Technology Stack
-
-| Area | Technology | Version |
-| --- | --- | --- |
-| Frontend | React | 19 |
-| Frontend build tool | Vite | 8 |
-| Language | JavaScript (ES modules) | — |
-| Styling | Tailwind CSS (via `@tailwindcss/vite`) | 4 |
-| Routing | React Router DOM | 7 |
-| Icons | Lucide React | 1 |
-| HTTP client | Axios | 1 |
-| Backend | Python | 3.14 |
-| API framework | FastAPI | 0.162 |
-| ASGI server | Uvicorn | 0.54 |
-| Validation | Pydantic / pydantic-settings | 2 |
-| ORM (prepared, unused) | SQLAlchemy | 2.1 |
-| Testing | pytest + httpx | — |
-
-## 5. Initial Architecture
-
-```
-┌─────────────────────────┐        HTTP / JSON        ┌──────────────────────────┐
-│  React SPA (Vite)       │  axios → VITE_API_BASE_URL│  FastAPI application     │
-│  http://localhost:5173  │ ────────────────────────► │  http://localhost:8000   │
-│  Tailwind CSS + Router  │ ◄──────────────────────── │  CORS: FRONTEND_URL      │
-└─────────────────────────┘                           └──────────────────────────┘
+```text
+React SPA (Vite, :5173)
+        │  axios + Bearer token
+        ▼
+FastAPI (:8000) ── Request guards ── CORS ── Auth ── Detection ── History ── Analytics
+        │
+        ├── SQLite / PostgreSQL (users, scans)
+        └── Google Gemini API (optional, backend-only key)
 ```
 
-- The frontend is a single-page app. `src/services/apiClient.js` creates the
-  single axios instance used by all API modules.
-- The backend exposes its routes through one aggregated router
-  (`app/api/__init__.py`), keeping `app/main.py` small.
-- Cross-origin requests are allowed only from `FRONTEND_URL`.
-- No database connection exists yet; `GET /health` therefore reports
-  `"database": "not_configured"`.
+- API routes are aggregated under `/api/v1`.
+- The frontend reads its API base URL from `VITE_API_BASE_URL`.
+- Protected routes require a valid JWT. The backend enforces authentication and
+  ownership independently of the frontend.
+- Raw submitted message content is **not stored**. Scan records keep only the
+  content type, score, level, category, summary, structured indicators,
+  recommendations and timestamps.
+- Database tables and indexes are created idempotently at startup. Existing
+  records are never reset automatically.
 
-### Frontend design system
+## 4. Project Structure
 
-- Tokens live in `frontend/src/styles/design-tokens.css` and are consumed as
-  Tailwind utilities such as `bg-navy-800`, `text-brand-300`, `rounded-card`
-  and `shadow-card`.
-- Primitives are in `src/components/ui`, layout pieces in
-  `src/components/common`, and navigation elements in `src/components/navigation`.
-- The internal showcase at <http://localhost:5173/design-system> documents the
-  brand, typography, palette, buttons, cards, badges, form controls, loading
-  states, feedback, navigation and responsive layouts. It is linked from the
-  footer only, never the primary navigation.
-
-Detailed layer-by-layer notes: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
-
-## 6. Project Folder Structure
-
-```
+```text
 UPI-ScamShield-AI/
-├── frontend/
-│   ├── public/
-│   │   └── favicon.svg
-│   ├── src/
-│   │   ├── assets/
-│   │   │   └── logo.svg
-│   │   ├── components/
-│   │   │   ├── ui/            # buttons, cards, badges, forms, feedback
-│   │   │   ├── common/        # container, headers, brand logo, grid
-│   │   │   ├── navigation/    # nav link, avatar, dropdown
-│   │   │   └── ApiStatusCard.jsx
-│   │   ├── pages/
-│   │   │   ├── DesignSystem.jsx
-│   │   │   ├── Home.jsx
-│   │   │   └── NotFound.jsx
-│   │   ├── layouts/
-│   │   │   └── MainLayout.jsx
-│   │   ├── services/
-│   │   │   ├── apiClient.js
-│   │   │   └── healthService.js
-│   │   ├── hooks/
-│   │   │   └── useHealthCheck.js
-│   │   ├── context/
-│   │   │   ├── AppContext.js
-│   │   │   └── AppProvider.jsx
-│   │   ├── styles/
-│   │   │   └── design-tokens.css
-│   │   ├── utils/
-│   │   │   ├── cn.js
-│   │   │   └── constants.js
-│   │   ├── App.jsx
-│   │   ├── main.jsx
-│   │   └── index.css
-│   ├── .env.example
-│   ├── .gitignore
-│   ├── .oxlintrc.json
-│   ├── index.html
-│   ├── package.json
-│   └── vite.config.js
 ├── backend/
 │   ├── app/
-│   │   ├── __init__.py
-│   │   ├── main.py
-│   │   ├── core/
-│   │   │   ├── __init__.py
-│   │   │   ├── config.py
-│   │   │   └── errors.py
-│   │   ├── api/
-│   │   │   ├── __init__.py
-│   │   │   └── health.py
-│   │   ├── models/
-│   │   │   └── __init__.py
-│   │   ├── schemas/
-│   │   │   ├── __init__.py
-│   │   │   └── health.py
-│   │   ├── services/
-│   │   │   └── __init__.py
-│   │   └── database/
-│   │       └── __init__.py
+│   │   ├── api/              # health, auth, detection/history, dashboard/analytics
+│   │   ├── core/             # config, JWT/password security, dependencies, errors, middleware
+│   │   ├── database/         # engine, session factory, schema initialization
+│   │   ├── models/           # User, Scan
+│   │   ├── schemas/          # Pydantic request/response contracts
+│   │   └── services/         # auth and detection engines (rules, URL, Gemini, scoring)
 │   ├── tests/
-│   │   └── test_health.py
-│   ├── .env.example
 │   ├── requirements.txt
-│   └── requirements-dev.txt
+│   ├── requirements-dev.txt
+│   └── .env.example
+├── frontend/
+│   ├── src/
+│   │   ├── components/       # UI, layout, detection, dashboard components
+│   │   ├── context/          # authentication state
+│   │   ├── data/awareness/   # static educational content
+│   │   ├── pages/            # landing, auth, dashboard, detection, history, analytics, awareness
+│   │   ├── routes/
+│   │   └── services/
+│   ├── package.json
+│   └── .env.example
 ├── docs/
-│   └── ARCHITECTURE.md
+│   ├── ARCHITECTURE.md
+│   └── PHASE_17_QA_REPORT.md
 ├── .gitignore
 ├── LICENSE
 └── README.md
 ```
 
-## 7. Installation
+## 5. Local Installation
 
-### Prerequisites
-
-- Node.js 20+ and npm
-- Python 3.11+ (developed on 3.14)
-- Git
-
-### Clone and install
+Prerequisites: Node.js 20+, Python 3.11+ (developed on 3.14), Git.
 
 ```bash
-git clone <your-repository-url> UPI-ScamShield-AI
+git clone <repository-url> UPI-ScamShield-AI
 cd UPI-ScamShield-AI
-```
 
-Backend:
-
-```bash
 cd backend
 python -m venv .venv
-# Windows (Git Bash)
-source .venv/Scripts/activate
-# macOS / Linux
-# source .venv/bin/activate
+source .venv/Scripts/activate        # Windows Git Bash
+# source .venv/bin/activate          # macOS / Linux
 pip install -r requirements.txt
 cp .env.example .env
-```
 
-Frontend:
-
-```bash
-cd frontend
+cd ../frontend
 npm install
 cp .env.example .env
 ```
 
-## 8. Frontend Startup
+Start the backend:
+
+```bash
+cd backend
+source .venv/Scripts/activate
+uvicorn app.main:app --reload --port 8000
+```
+
+Start the frontend in another terminal:
 
 ```bash
 cd frontend
 npm run dev
 ```
 
-Open <http://localhost:5173>. The dev server is pinned to port 5173
-(`strictPort: true`) because the backend allow-lists that exact origin.
+Open <http://localhost:5173>. API documentation is available at
+<http://localhost:8000/docs> and <http://localhost:8000/redoc>.
 
-Other frontend scripts:
+## 6. Environment Variables
+
+Only `.env.example` files are tracked. Real `.env` files, databases, virtual
+environments and build output are gitignored.
+
+### Backend
+
+| Variable | Default | Notes |
+| --- | --- | --- |
+| `APP_NAME` | `UPI ScamShield AI` | Service name in API metadata |
+| `APP_VERSION` | `1.0.0` | Reported API version |
+| `ENVIRONMENT` | `development` | `production` enables production checks and HSTS |
+| `DEBUG` | `true` | Set `false` in production |
+| `DATABASE_URL` | `sqlite:///./scamshield.db` | SQLAlchemy database URL |
+| `API_PREFIX` | `/api/v1` | API route prefix |
+| `FRONTEND_URL` | `http://localhost:5173` | Primary allowed CORS origin |
+| `CORS_ORIGINS` | empty | Optional comma-separated extra origins |
+| `JWT_SECRET_KEY` | empty | **Required in production**, at least 32 characters. Empty in development uses an ephemeral secret and invalidates sessions on restart. |
+| `JWT_ALGORITHM` | `HS256` | Only HS256, HS384 and HS512 are accepted |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | `30` | 5–1440 minutes |
+| `RATE_LIMIT_LOGIN_PER_MINUTE` | `10` | Per client IP and path |
+| `RATE_LIMIT_REGISTER_PER_5_MINUTES` | `5` | Per client IP and path |
+| `RATE_LIMIT_ANALYZE_PER_MINUTE` | `30` | Per client IP and path |
+| `RATE_LIMIT_API_PER_MINUTE` | `300` | General mutation/API bucket |
+| `TRUST_PROXY_HEADERS` | `false` | Enable only behind a trusted reverse proxy |
+| `MAX_REQUEST_BYTES` | `1048576` | Declared request body limit |
+| `GEMINI_API_KEY` | empty | Optional; backend-only, never sent to the browser |
+| `GEMINI_MODEL` | `gemini-2.5-flash` | Gemini model name |
+| `GEMINI_TIMEOUT_SECONDS` | `30` | Provider request timeout |
+| `GEMINI_MAX_RETRIES` | `2` | Bounded retries |
+
+Generate a secret with:
 
 ```bash
-npm run build     # production build → frontend/dist
-npm run preview   # serve the production build on port 5173
-npm run lint      # oxlint
+python -c "import secrets; print(secrets.token_urlsafe(48))"
 ```
 
-## 9. Backend Startup
+### Frontend
+
+| Variable | Default | Notes |
+| --- | --- | --- |
+| `VITE_API_BASE_URL` | `http://localhost:8000/api/v1` | Must include `/api/v1` |
+
+Vite exposes only `VITE_`-prefixed variables. Never put backend secrets in a
+frontend environment file: anything bundled into the SPA is public.
+
+## 7. Authentication and Security Architecture
+
+- Passwords are hashed with **Argon2id**; plaintext passwords are never stored
+  or logged. Password length is validated at 8–128 characters.
+- Access tokens are signed JWTs with `sub`, `iat`, `exp`, `iss`, `aud` and a
+  `type` claim. Decoding requires all of them and only the configured HMAC
+  algorithm, which rejects `alg=none`, algorithm confusion, expired, tampered
+  and wrong-key tokens.
+- Production startup fails if `JWT_SECRET_KEY` is missing, shorter than 32
+  characters or a known weak value.
+- Login and registration return generic credential errors to avoid account
+  enumeration. Duplicate registration returns a generic conflict message.
+- All detection, history, dashboard and analytics endpoints require
+  authentication. Every scan query is scoped by `user_id`; another user's scan
+  detail returns `404` rather than revealing that the record exists.
+- Validation errors do not echo submitted values, so passwords and tokens are
+  not reflected in responses. Unhandled exceptions return a generic 500 without
+  stack traces while full details stay in server logs.
+- Request guards enforce a 1 MB body limit, per-IP sliding-window rate limits
+  and security headers (`X-Content-Type-Options`, `X-Frame-Options`,
+  `Referrer-Policy`, `Permissions-Policy`, `Cache-Control: no-store` on API
+  responses, and HSTS in production).
+- CORS allows only `FRONTEND_URL` plus configured extra origins; wildcard
+  origins are discarded.
+- SQLAlchemy parameterizes queries. Sort fields, content types, risk levels and
+  other filter options are allow-listed.
+- The frontend uses `textContent`/React escaping for all dynamic content and
+  does not use `dangerouslySetInnerHTML`. External awareness links use
+  `rel="noopener noreferrer"`.
+
+## 8. Privacy and Data Retention
+
+- Submitted message text is processed in memory for the request and is **not
+  stored** in the database or written to application logs.
+- Scan records store only analysis metadata and results. `content_hash` is not
+  populated.
+- URL query values are redacted in API responses (`?token=[redacted]`) before
+  being stored in indicators or displayed. Host and path remain visible for
+  explainability.
+- Password hashes, JWT secrets and Gemini API keys are never returned by APIs or
+  included in frontend bundles.
+- Users can delete all of their scan history from the History page or via
+  `DELETE /api/v1/detect/history`. There is no automatic retention expiry and no
+  per-scan deletion endpoint yet.
+- Account deletion, email verification and password reset are not implemented.
+
+## 9. Gemini API Processing Disclosure
+
+Gemini analysis is optional and only runs when `GEMINI_API_KEY` is configured.
+
+When enabled, the submitted message or URL text and its content type are sent
+from the backend to the Google Gemini API. That content is therefore processed
+by Google under the applicable Gemini API terms and data policies. No message
+is sent to Gemini when the key is absent, and the browser never receives the
+key. Failures, timeouts and invalid model output fall back to rule and URL
+analysis without failing the request.
+
+The prompt treats submitted text as untrusted JSON-delimited data and the model
+response is validated against a strict Pydantic schema. This reduces, but does
+not eliminate, prompt-injection risk; model output is never executed or trusted
+as instructions. If you do not want message content sent to a third party, leave
+`GEMINI_API_KEY` empty.
+
+## 10. URL Analysis and Limitations
+
+URL analysis is **passive**. The application parses submitted text and applies
+heuristics; it does not open links, send HTTP requests, resolve DNS, follow
+redirects or fetch external pages. This prevents SSRF and drive-by exposure but
+means the analyzer cannot inspect live page content.
+
+Checks include IP-address hosts, suspicious TLDs, URL shorteners, excessive
+subdomains, credential-like user-info, punycode/Unicode normalization, risky
+keywords and unusual ports. Query values are redacted in responses.
+
+Limitations: heuristics can produce false positives and false negatives; a
+short, simple message containing a shortened URL may receive a low score because
+the message-level rule bands dominate. Domain age, TLS certificates, live
+content and reputation feeds are not checked. A low score is not a guarantee of
+safety.
+
+## 11. API Overview
+
+Base URL: `/api/v1`
+
+| Method | Path | Auth | Purpose |
+| --- | --- | --- | --- |
+| `GET` | `/` | No | API metadata |
+| `GET` | `/health` | No | Service and database health |
+| `GET` | `/system/info` | No | Safe module metadata |
+| `POST` | `/auth/register` | No | Create an account |
+| `POST` | `/auth/login` | No | Obtain a bearer token |
+| `GET` | `/auth/me` | Yes | Current user profile |
+| `POST` | `/auth/logout` | Yes | Client-side logout acknowledgement |
+| `POST` | `/detect/analyze` | Yes | Analyze message or URL and persist result |
+| `GET` | `/detect/history` | Yes | Paginated, filtered, sorted history |
+| `GET` | `/detect/history/{scan_id}` | Yes | Owner-only scan detail |
+| `DELETE` | `/detect/history` | Yes | Delete all scans for the current user |
+| `GET` | `/dashboard/stats` | Yes | Dashboard statistics |
+| `GET` | `/analytics/overview` | Yes | Extended analytics |
+
+`POST /detect/analyze` accepts:
+
+```json
+{
+  "content": "Your KYC is expiring. Share the OTP at http://bit.ly/example now.",
+  "content_type": "sms"
+}
+```
+
+Supported content types: `sms`, `whatsapp`, `payment_request`, `general`, `url`.
+Content is limited to 10,000 characters.
+
+Final analysis uses `max(rule_score, url_score)` as the base score. If Gemini
+returns a validated result, the documented 60/40 hybrid merge is applied; if not,
+rules and URL findings remain authoritative. URL-only severity bands are
+Critical ≥80, High ≥20, Medium ≥10, Low below 10.
+
+## 12. Testing and Dependency Audits
+
+Backend (104 tests as of Phase 17):
 
 ```bash
 cd backend
-source .venv/Scripts/activate        # Windows (Git Bash)
-# source .venv/bin/activate          # macOS / Linux
-uvicorn app.main:app --reload --port 8000
-```
-
-- API root: <http://localhost:8000>
-- Swagger UI: <http://localhost:8000/docs>
-- ReDoc: <http://localhost:8000/redoc>
-- OpenAPI schema: <http://localhost:8000/openapi.json>
-
-Run the backend tests:
-
-```bash
-pip install -r requirements-dev.txt
+source .venv/Scripts/activate
 pytest -v
 ```
 
-## 10. Environment Configuration
+Frontend build and lint:
 
-No secrets are committed. Only `.env.example` files are tracked; the real
-`.env` files are gitignored.
-
-### `frontend/.env`
-
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `VITE_API_BASE_URL` | `http://localhost:8000` | Base URL used by the axios client |
-
-Vite only exposes variables prefixed with `VITE_`. Restart the dev server after
-changing them.
-
-### `backend/.env`
-
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `APP_NAME` | `UPI ScamShield AI` | Service name in responses and docs |
-| `APP_VERSION` | `0.1.0` | Reported API version |
-| `ENVIRONMENT` | `development` | Deployment context |
-| `FRONTEND_URL` | `http://localhost:5173` | The only origin allowed by CORS |
-
-## 11. API Health Check
-
-### `GET /`
-
-```json
-{
-  "status": "ok",
-  "service": "UPI ScamShield AI API",
-  "version": "0.1.0"
-}
+```bash
+cd frontend
+npm run build
+npm run lint
 ```
 
-### `GET /health`
+There is currently **no committed frontend unit or browser test suite** in the
+repository. Phase 17 verified the production build, lint, a backend API journey
+and a one-off Playwright/Chrome journey covering registration, detection, URL
+redaction, history, analytics, the quiz, authorization, mobile navigation and
+console errors. The Playwright dependency and script were not retained. See
+`docs/PHASE_17_QA_REPORT.md` for the full results and remaining gaps.
 
-```json
-{
-  "status": "healthy",
-  "database": "not_configured",
-  "service": "UPI ScamShield AI"
-}
+Dependency audits:
+
+```bash
+cd frontend && npm audit
+cd ../backend && python -m pip_audit
+python -m pip list --outdated
 ```
 
-`database` is `not_configured` by design: persistence is not wired up in this
-phase.
+Phase 17 results: `npm audit` reported **0 vulnerabilities**; `pip_audit`
+reported **no known vulnerabilities** after replacing vulnerable `python-jose`
+and its `ecdsa` dependency with PyJWT. Compatible outdated packages remain
+(`fastapi` 0.162.2 → 0.162.3 and `tenacity` 9.1.4 → 9.2.1 at audit time) and
+were intentionally not upgraded without a full retest.
 
-Errors share one shape, e.g. for an unknown route:
+## 13. Known Security Limitations
 
-```json
-{
-  "status": "error",
-  "detail": "Not Found",
-  "path": "/does-not-exist"
-}
-```
+- JWTs are stored in `localStorage` in the browser, so an XSS vulnerability
+  would expose the token. The app avoids unsafe HTML, but a strict Content
+  Security Policy is not yet configured.
+- Logout is client-side only. Access tokens remain valid until expiration
+  (30 minutes by default); there is no server-side token revocation or refresh
+  token rotation.
+- Rate limiting is in-process and per worker. Multi-instance or multi-worker
+  deployments need a shared store such as Redis. Proxy headers are trusted only
+  when `TRUST_PROXY_HEADERS=true`.
+- SQLite is the default for local development. Production concurrency and
+  backups require PostgreSQL and a migration strategy.
+- No account lockout, CAPTCHA, email verification, MFA or password reset.
+- Dashboard and analytics currently load the user's scans into memory for
+  aggregation; this is acceptable for individual accounts but should be moved
+  to SQL aggregation at larger scale.
+- Detection is heuristic. It can miss scams and can flag legitimate messages.
+  URL content is never fetched, so live phishing pages cannot be confirmed.
+- The project has not undergone a professional penetration test or formal
+  security certification.
 
-The welcome screen calls `GET /health` on load and shows the live connection
-state in the header and in the status card.
+## 14. Quality Assurance Report
 
-## 12. Development Roadmap
+Phase 17 findings, fixes, test results, performance measurements, accessibility
+changes, remaining risks and deployment readiness are documented in
+[`docs/PHASE_17_QA_REPORT.md`](docs/PHASE_17_QA_REPORT.md).
+
+## 15. Roadmap
 
 | Phase | Scope | Status |
 | --- | --- | --- |
-| 1 | Project foundation, routing, Tailwind, health API, CORS, env config, docs | **Implemented** |
-| 2 | Frontend design system: tokens, component library, `/design-system` showcase | **Implemented** |
-| 3 | Database layer (SQLAlchemy engine, models, migrations), persisted scan records | *Planned — not implemented* |
-| 4 | Fraud detection engine (rules + ML risk scoring, explainable output) | *Planned — not implemented* |
-| 5 | Scan APIs: submit a UPI request/message, receive risk verdict with reasons | *Planned — not implemented* |
-| 6 | User accounts and authentication (JWT), scan history | *Planned — not implemented* |
-| 7 | Analytics dashboard, reporting, admin views | *Planned — not implemented* |
-| 8 | Deployment, monitoring, rate limiting, hardening | *Planned — not implemented* |
+| 1 | Full-stack foundation, routing, health API, CORS | Complete |
+| 2 | Design system and component library | Complete |
+| 3–7 | Database, detection engine, scan APIs, authentication, history | Complete |
+| 8–14 | Detection intelligence, URL analysis, AI/hybrid scoring, UX | Complete |
+| 15 | History, dashboard and security analytics | Complete |
+| 16 | Scam Awareness and Education Center | Complete |
+| 17 | Testing, security audit, performance optimization, QA report | Complete |
+| 18 | Deployment preparation and release | Planned |
 
-No AI or fraud-scoring functionality exists in the current codebase; nothing in
-the UI claims otherwise.
+## 16. Troubleshooting
 
-## Troubleshooting
-
-| Symptom | Cause / fix |
+| Symptom | Fix |
 | --- | --- |
-| "Backend unreachable" on the welcome screen | Start Uvicorn on port 8000, or fix `VITE_API_BASE_URL` in `frontend/.env` and restart Vite |
-| Browser CORS error | `FRONTEND_URL` in `backend/.env` must match the browser origin exactly (`http://localhost:5173`); restart Uvicorn after changing it |
-| `Port 5173 is already in use` | Stop the process using port 5173 — the frontend uses `strictPort` so CORS stays predictable |
-| `ModuleNotFoundError: No module named 'app'` | Run `uvicorn` and `pytest` from the `backend/` directory |
+| Backend unreachable | Start Uvicorn on port 8000 and check `VITE_API_BASE_URL` |
+| CORS error | Make `FRONTEND_URL` exactly match the browser origin; restart Uvicorn |
+| `JWT_SECRET_KEY must be set...` | Set a 32+ character secret when `ENVIRONMENT=production` |
+| Sessions expire after restart | Set `JWT_SECRET_KEY` in development instead of using the ephemeral key |
+| Port 5173 in use | Stop the process using it; the frontend uses `strictPort` |
+| `No module named 'app'` | Run Uvicorn and pytest from `backend/` |
 
 ## License
 
 Released under the [MIT License](LICENSE).
-
-## Phase 15 — Detection History and Security Analytics
-
-### Detection history architecture
-- Scan results are persisted in the existing `scans` table (SQLAlchemy `Scan` model) and associated with the authenticated user (`user_id`).
-- Raw submitted message content is not stored; history and analytics operate on saved metadata and analysis outputs (risk score/level, category, summary, indicators, recommendations, timestamps).
-- All history and analytics endpoints require authentication and return data scoped to the current user only.
-
-### History API endpoints
-Base prefix: `/api/v1`
-
-#### `GET /detect/history`
-Returns paginated scan history for the authenticated user.
-
-**Query parameters**
-- `page` (int, default 1)
-- `limit` (int, default 10, max 100)
-- `risk_level` (`Low|Medium|High|Critical`)
-- `content_type` (`sms|whatsapp|payment_request|url|general`)
-- `category` (string)
-- `start_date`, `end_date` (ISO-8601 date/datetime)
-- `search` (safe metadata search: content type, risk level, category, summary)
-- `sort_by` (`created_at` or `risk_score`)
-- `sort_order` (`asc` or `desc`)
-
-**Example response**
-```json
-{
-  "success": true,
-  "items": [
-    {
-      "id": 12,
-      "content_type": "sms",
-      "risk_score": 86,
-      "risk_level": "Critical",
-      "category": "Credential Theft",
-      "summary": "Detected 3 indicator(s) associated with potential fraud patterns.",
-      "created_at": "2026-11-10T12:34:56+00:00"
-    }
-  ],
-  "pagination": { "page": 1, "limit": 10, "total": 25, "total_pages": 3 },
-  "overview": {
-    "total_scans": 25,
-    "suspicious_scans": 9,
-    "critical_scans": 2,
-    "most_recent_scan_date": "2026-11-10T12:34:56+00:00"
-  }
-}
-```
-
-#### `GET /detect/history/{scan_id}`
-Returns saved scan details for the authenticated owner only. Nonexistent or unauthorized records return `404` to avoid leaking record existence.
-
-**Example response**
-```json
-{
-  "success": true,
-  "scan": {
-    "id": 12,
-    "content_type": "sms",
-    "risk_score": 86,
-    "risk_level": "Critical",
-    "category": "Credential Theft",
-    "summary": "Detected 3 indicator(s) associated with potential fraud patterns.",
-    "indicators": [
-      { "name": "OTP request", "severity": "high", "description": "Message asks for OTP", "source": "rule_based" }
-    ],
-    "recommendations": ["Do not share OTP or UPI PIN"],
-    "analysis_type": "rule_based_only",
-    "rule_based_status": "completed",
-    "gemini_status": "unavailable",
-    "url_status": "not_applicable",
-    "created_at": "2026-11-10T12:34:56+00:00"
-  }
-}
-```
-
-#### `DELETE /detect/history`
-Deletes all scan history for the authenticated user only (requires explicit confirmation in frontend). Returns number of deleted records.
-
-```json
-{ "success": true, "deleted": 25 }
-```
-
-### Analytics API
-#### `GET /dashboard/stats`
-Returns real, user-scoped dashboard statistics (supports optional `days` query parameter).
-
-Includes: `total_scans`, `suspicious_scans`, `critical_alerts`, `average_risk_score`, `risk_distribution`, `content_type_distribution`, `detection_category_distribution`, `daily_scan_activity`, `recent_scans`, `risk_insights`, `most_recent_scan_date`.
-
-#### `GET /analytics/overview`
-Returns extended analytics for the `/analytics` page (supports optional `days` query parameter for 7/30/90-day periods; omit for all time).
-
-Includes dashboard fields plus: `period_days`, `weekly_trends`, `monthly_trends`, `most_frequent_indicators`, `security_insights`.
-
-**Example response (truncated)**
-```json
-{
-  "success": true,
-  "total_scans": 25,
-  "suspicious_scans": 9,
-  "critical_alerts": 2,
-  "average_risk_score": 47.2,
-  "risk_distribution": { "Low": 10, "Medium": 6, "High": 7, "Critical": 2 },
-  "content_type_distribution": { "sms": 14, "whatsapp": 7, "url": 4 },
-  "detection_category_distribution": { "Credential Theft": 8, "Payment Fraud": 5 },
-  "daily_scan_activity": [{ "date": "2026-11-09", "count": 3 }],
-  "weekly_trends": [{ "period": "2026-W46", "count": 25 }],
-  "monthly_trends": [{ "period": "2026-11", "count": 25 }],
-  "most_frequent_indicators": [{ "name": "OTP request", "count": 6 }],
-  "security_insights": ["Most of your scans involved sms content."]
-}
-```
-
-### Frontend history and analytics features
-- **History page (`/history`)**: overview cards (total/suspicious/critical/most recent), filterable/sortable/paginated table (risk level, content type, category, date range, safe metadata search), loading/empty/no-results/error states, scan detail modal (risk/category/summary/indicators with source/severity/explanation, recommendations, analysis/source statuses, timestamp), and clear-history action with explicit confirmation.
-- **Analytics page (`/analytics`)**: summary cards, risk distribution pie chart, daily activity line chart, content-type bar chart, top detection categories, deterministic security insights, and time-range filters (7/30/90/all) fetched from backend.
-- **Dashboard**: real backend stats, consistent totals/risk definitions, recent scans and insights from `/dashboard/stats`, empty states for new accounts, and refresh action.
-
-### Privacy and security safeguards
-- Authentication required on all history/analytics endpoints; strict user-level data isolation.
-- Scan detail returns 404 for unauthorized/nonexistent IDs; bulk delete scoped to current user only.
-- Raw submitted message content is never stored, searched, or returned.
-- Input validation and pagination limits (max page size 100); safe error responses without internal prompts/keys/stack traces.
-- Frontend requires explicit confirmation before clearing history.
-
-### Testing instructions
-Backend:
-```bash
-cd backend
-pytest -q
-```
-
-Frontend build:
-```bash
-cd frontend
-npm run build
-```
-
-Phase 15 backend tests: `backend/tests/test_phase15_history_analytics.py` (history auth/isolation/pagination/filters/sort/search/detail/delete and dashboard/analytics stats using temporary SQLite databases and fictional records).
-
-## Phase 16 — UPI Scam Awareness and Education Center
-
-The public `/awareness` route is a self-contained education center. All content is
-definitional and read-only in the frontend (`frontend/src/data/awareness/`), so the
-page requires no backend calls and no authentication.
-
-### Awareness Center features
-- **Awareness dashboard**: counts of guides/rules/quiz questions, section shortcuts,
-  and a curated daily safety tip with previous/next navigation.
-- **Common UPI scams library**: 15 educational guides with search and category filters.
-- **Scam detail view**: overview, how the scam works, psychological manipulation
-  techniques, warning signs, a clearly labelled fictional example, avoidance guidance,
-  actions if targeted, and related scam links. Includes a back action to the library.
-- **How to identify suspicious messages**: 11 red flags plus a verification reminder.
-- **UPI safety rules**: 12 interactive checklist items with local-only progress.
-- **Emergency response**: nine numbered steps, a prominent 1930 call link, and a
-  recovery-scam warning.
-- **FAQ**: 10 common questions in an accessible accordion.
-- **Knowledge quiz**: 12 multiple-choice questions with immediate feedback,
-  explanations, a final score, correct-answer review, and restart.
-- **Official resources**: clearly labelled external links to the National Cyber Crime
-  Reporting Portal, the 1930 helpline, NPCI, and the RBI.
-
-### Scam categories
-| Category | Guides |
-| --- | --- |
-| Payment fraud | UPI PIN collection, fake payment screenshot, collect request, QR-code payment, investment and trading |
-| Phishing | Phishing website and malicious URL |
-| Identity theft | OTP theft |
-| Social engineering | Fake customer care, screen-sharing/remote access, job and work-from-home, government impersonation |
-| Banking fraud | Fake KYC verification, fake bank account-blocking message |
-| Online shopping and rewards | Fake cashback and reward, lottery and prize |
-
-All 15 guides include a fictional example message explicitly marked as an
-educational example. No real victim information is used, and no message is presented
-as a real communication.
-
-### UPI safety checklist
-Never share your UPI PIN · Never share OTPs or banking passwords · Enter your PIN only
-inside your trusted payment app when intentionally authorizing a transaction ·
-Receiving money never requires a PIN · Verify the recipient before sending · Do not
-approve unknown collect requests · Avoid suspicious SMS/WhatsApp links · Never install
-remote-access apps for an unknown caller · Do not trust payment screenshots without
-checking your account history · Verify customer-care numbers through official sources ·
-Be suspicious of unexpected rewards and urgent requests · Keep payment apps and devices
-updated.
-
-Checked items are kept in component state for the session only; nothing is stored or
-transmitted.
-
-### Emergency response and official resources
-If money is lost, the page advises: stop further payments, contact the bank through
-official channels, call **1930** as soon as possible, file a complaint at
-[cybercrime.gov.in](https://cybercrime.gov.in/), preserve transaction IDs and evidence,
-secure affected services and passwords, and beware of recovery scams. The content
-states explicitly that recovery is not guaranteed and that reporting does not
-automatically reverse a transaction.
-
-Official resources shown: National Cyber Crime Reporting Portal
-(https://cybercrime.gov.in/), Indian Cybercrime Helpline **1930**, NPCI
-(https://www.npci.org.in/), and the Reserve Bank of India (https://www.rbi.org.in/).
-External links open in a new tab with `rel="noopener noreferrer"`.
-
-### Quiz and search behaviour
-- Search matches scam names, descriptions, categories, warning signs, and how-it-works
-  steps, and updates as the user types.
-- Category filters cover the six categories above; a reset action clears both search
-  and filters, and an explicit no-results state is shown when nothing matches.
-- The quiz evaluates each answer immediately, requires an answer before continuing,
-  explains every correct answer, and reviews all responses with the final score.
-  It collects no personal information and is not a certification.
-
-### Testing instructions
-```bash
-cd frontend
-npm run build
-
-cd ../backend
-pytest -q
-```
-
-The Awareness Center is static frontend content, so there is no new backend test
-surface for Phase 16. Manual checks: open `/awareness` with the app running, confirm all
-seven sections render, open and close several scam guides, search for `OTP` and `KYC`,
-filter each category, trigger the no-results state and reset it, complete the quiz and
-restart it, check the checklist progress, and confirm the four official links and the
-1930 number.
-
-Phase 16 adds no database models, AI providers, payment processing, forums, or
-user-generated content.

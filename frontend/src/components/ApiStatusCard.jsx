@@ -5,7 +5,7 @@ import {
   Server,
   WifiOff,
 } from 'lucide-react'
-import { useApp } from '../context/AppContext.js'
+import { useApp } from '../context/AppContext.jsx'
 import { API_BASE_URL } from '../services/apiClient.js'
 import { StatusBadge } from './ui/Badge.jsx'
 import { SecondaryButton } from './ui/Button.jsx'

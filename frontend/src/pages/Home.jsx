@@ -1,6 +1,6 @@
 import ApiStatusCard from '../components/ApiStatusCard.jsx'
 import logoUrl from '../assets/logo.svg'
-import { useApp } from '../context/AppContext.js'
+import { useApp } from '../context/AppContext.jsx'
 import { APP_VERSION } from '../utils/constants.js'
 
 function Home() {

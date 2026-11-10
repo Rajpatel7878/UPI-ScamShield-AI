@@ -7,7 +7,7 @@ the development database.
 import os
 import sys
 import tempfile
-import shutil
+import uuid
 
 # Add backend to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
@@ -22,11 +22,16 @@ from app.models.scan import Scan
 
 TEST_DB_PATH = os.path.join(tempfile.gettempdir(), "test_scamshield.db")
 
+# Each test gets a fresh database file. Reusing one fixed file made reruns fail
+# on UNIQUE constraints from a previous run.
+_current_db_path = TEST_DB_PATH
+_current_engine = None
+
 
 def get_test_engine():
-    """Create a temporary test database engine."""
+    """Create a test database engine for the active test database."""
     return create_engine(
-        f"sqlite:///{TEST_DB_PATH}",
+        f"sqlite:///{_current_db_path}",
         echo=False,
         future=True,
         connect_args={"check_same_thread": False},
@@ -45,11 +50,24 @@ def get_test_session():
 
 
 def setup_test_database():
-    """Create all tables in the test database."""
-    # Create engine and tables
-    test_engine = get_test_engine()
-    Base.metadata.create_all(bind=test_engine)
-    return test_engine
+    """Create a fresh, uniquely named test database with all tables."""
+    global _current_db_path, _current_engine
+
+    if _current_engine is not None:
+        _current_engine.dispose()
+    if os.path.exists(_current_db_path) and _current_db_path != TEST_DB_PATH:
+        try:
+            os.remove(_current_db_path)
+        except OSError:
+            pass
+
+    _current_db_path = os.path.join(
+        tempfile.gettempdir(),
+        f"test_scamshield_{uuid.uuid4().hex}.db",
+    )
+    _current_engine = get_test_engine()
+    Base.metadata.create_all(bind=_current_engine)
+    return _current_engine
 
 
 def test_engine_creation():
@@ -257,7 +275,7 @@ def test_rollback_behavior():
 
 def run_all_tests():
     """Run all database tests."""
-    print(f"Testing with database: {TEST_DB_PATH}")
+    print(f"Testing with database: {_current_db_path}")
     print("=" * 50)
     
     test_engine_creation()

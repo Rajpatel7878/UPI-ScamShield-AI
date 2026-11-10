@@ -1,1 +1,285 @@
-"""URL parser for the URL and phishing detection engine.\n\nProvides robust URL extraction and normalization without modifying original content,\nexecuting JavaScript, or following redirects.\n\"\"\"\nfrom __future__ import annotations\n\nimport re\nfrom typing import Any\nfrom typing import Dict\nfrom typing import List\nfrom typing import Optional\nfrom typing import Tuple\n\n\n# Regex pattern for URL extraction (per Phase 13 spec)\n# Matches http/https URLs embedded in text, with support for subdomains,\n# query parameters, ports, and various URL formats\nURL_PATTERN = re.compile(\n    r'(?i)\\b(?:https?://)'  # http:// or https://\n    r'(?:(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?\\.)+[a-zA-Z]{2,}|'  # domain name\n    r'(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)'  # IPv4\n    r'(?::[0-9]+)?'  # optional port\n    r'(?:/[^\s]*)?)\\b',  # path\n    re.DOTALL,\n)\n\n\n# Pattern for standalone URLs (not preceded by http/https but may start with www)\nSTANDALONE_URL_PATTERN = re.compile(\n    r'(?i)\\b(?:www\\.)[a-zA-Z0-9][a-zA-Z0-9-]*(?:\\.[a-zA-Z]{2,})+[^\s]*\\b',\n    re.DOTALL,\n)\n\n\n# Pattern for detecting IP-based hostnames (not domain names)\nIP_HOSTNAME_PATTERN = re.compile(\n    r'\\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\b',\n    re.DOTALL,\n)\n\n\n# Pattern for detecting URL shorteners\nSHORTENER_PATTERN = re.compile(\n    r'(?i)bit\\.ly|tinyurl\\.com|goo\\.gl|t\\.co|is\\.gd|buff\\.ly|adf\\.ly',\n    re.DOTALL,\n)\n\n\n# Pattern for detecting suspicious TLDs (non-standard, very new, or uncommon)\nSUSPICIOUS_TLD_PATTERN = re.compile(\n    r'(?i)\\.[a-zA-Z]{2,3}(?:\\.[a-zA-Z]{2})?\\b(?!\\.(com|org|net|edu|gov|mil|int))',\n    re.DOTALL,\n)\n\n\n# Pattern for detecting excessive subdomains (3+ subdomain levels)\nEXCESSIVE_SUBDOMAIN_PATTERN = re.compile(\n    r'(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?\\.){3,}[a-zA-Z]{2,}\\b',\n    re.DOTALL,\n)\n\n\n# Pattern for detecting punycode/homograph indicators\nPUNYCODE_PATTERN = re.compile(r'xn--', re.DOTALL)\n\n\n# Pattern for detecting embedded credentials in URLs\nCREDENTIAL_PATTERN = re.compile(\n    r'(?i)(?:username|password|token|secret|api_key|apikey)=[^&\\s\\n\\r]+',\n    re.DOTALL,\n)\n\n\n# Pattern for detecting suspicious query parameters\nSUSPICIOUS_QUERY_PATTERN = re.compile(\n    r'(?i)(?:login|verify|signin|signout|session|token|passwd|credential)\\b',\n    re.DOTALL,\n)\n\n\n# Pattern for detecting unusual ports (outside common 80, 443, 8080)\nUNUSUAL_PORT_PATTERN = re.compile(\n    r':(?!80\\b|443\\b|8080\\b)\\d{2,5}\\b',\n    re.DOTALL,\n)\n\n\n# Common legitimate TLDs (for conservative matching)\nLEGITIMATE_TLDS = {\n    'com', 'org', 'net', 'edu', 'gov', 'mil', 'int',\n    'co', 'ai', 'io', 'app', 'dev', 'blog', 'info', 'biz',\n    'in', 'us', 'uk', 'de', 'jp', 'cn', 'fr', 'ca',\n}\n\n\ndef extract_urls(content: str) -> list[dict[str, str]]:\n    \"\"\"Extract URLs from content without modifying the original text.\n    \n    Identifies HTTP/HTTPS URLs and standalone www URLs embedded in text.\n    Returns extracted URLs with their position and original form.\n    \n    Args:\n        content: The text content to search for URLs.\n    \n    Returns:\n        List of dicts with 'url', 'start', 'end', 'normalized' keys.\n    \"\"\"\n    if not content:\n        return []\n    \n    urls: list[dict[str, str]] = []\n    \n    # Find http/https URLs\n    for match in URL_PATTERN.finditer(content):\n        url = match.group(0)\n        start = match.start()\n        end = match.end()\n        # Normalize: strip trailing punctuation, preserve the core\n        normalized = url.rstrip('.,;:!')\n        urls.append({\n            'url': normalized,\n            'start': str(start),\n            'end': str(end),\n            'original_segment': content[start:end] if start >= 0 and end <= len(content) else '',\n        })\n    \n    # Find standalone www URLs (not preceded by http/https)\n    for match in STANDALONE_URL_PATTERN.finditer(content):\n        url = match.group(0)\n        start = match.start()\n        end = match.end()\n        normalized = url.rstrip('.,;:!')\n        urls.append({\n            'url': normalized,\n            'start': str(start),\n            'end': str(end),\n            'original_segment': content[start:end] if start >= 0 and end <= len(content) else '',\n        })\n    \n    # Deduplicate by normalized URL\n    seen: set[str] = set()\n    unique_urls: list[dict[str, str]] = []\n    for u in urls:\n        norm = u['url'].lower()\n        if norm not in seen:\n            seen.add(norm)\n            unique_urls.append(u)\n    \n    return unique_urls\n\n\ndef normalize_url(url: str) -> str:\n    \"\"\"Normalize a URL safely for analysis.\n    \n    Strips protocol, fragments, and query parameters for hostname analysis,\n    but preserves enough structure for indicator checking.\n    Does not modify the original URL string.\n    \n    Args:\n        url: The URL to normalize.\n    \n    Returns:\n        Normalized URL string suitable for analysis.\n    \"\"\"\n    if not url:\n        return url\n    \n    # Work on a copy, don't modify original\n    normalized = url\n    \n    # Remove fragment (#section)\n    if '#' in normalized:\n        normalized = normalized[:normalized.index('#')]\n    \n    # Parse to get hostname (basic parsing, no external libraries)\n    # Strip protocol\n    if normalized.startswith('https://'):\n        normalized = normalized[10:]\n    elif normalized.startswith('http://'):\n        normalized = normalized[7:]\n    \n    # Remove path beyond hostname for basic analysis\n    # Keep it simple: find the first / after the domain, or use the whole thing\n    slash_idx = normalized.find('/')\n    if slash_idx > 0:\n        # We keep the hostname part only for some checks\n        # but for full analysis we could keep the path\n        pass  # Keep the full URL for now\n    \n    # Remove trailing dots and whitespace\n    normalized = normalized.strip(' .')\n    \n    return normalized\n\n\ndef is_ip_based_hostname(url: str) -> bool:\n    \"\"\"Check if the URL hostname is an IP address rather than a domain name.\"\"\"\n    if not url:\n        return False\n    # Check if hostname starts with an IP pattern\n    return bool(IP_HOSTNAME_PATTERN.search(url))\n\n\ndef is_shortened_url(url: str) -> bool:\n    \"\"\"Check if the URL uses a known URL shortener.\"\"\"\n    if not url:\n        return False\n    return bool(SHORTENER_PATTERN.search(url))\n\n\ndef has_excessive_subdomains(hostname: str) -> bool:\n    \"\"\"Check if the hostname has 3+ subdomain levels.\"\"\"\n    if not hostname:\n        return False\n    return bool(EXCESSIVE_SUBDOMAIN_PATTERN.search(hostname))\n\n\ndef has_punycode(hostname: str) -> bool:\n    \"\"\"Check if the hostname contains punycode indicators.\"\"\"\n    if not hostname:\n        return False\n    return bool(PUNYCODE_PATTERN.search(hostname))\n\n\ndef has_embedded_credentials(url: str) -> bool:\n    \"\"\"Check if the URL has embedded credentials (username/password/token).\"\"\"\n    if not url:\n        return False\n    return bool(CREDENTIAL_PATTERN.search(url))\n\n\ndef has_suspicious_query(url: str) -> bool:\n    \"\"\"Check if the URL has suspicious query parameters.\"\"\"\n    if not url:\n        return False\n    return bool(SUSPICIOUS_QUERY_PATTERN.search(url))\n\n\ndef has_unusual_port(url: str) -> bool:\n    \"\"\"Check if the URL has an unusual port (not 80, 443, 8080).\"\"\"\n    if not url:\n        return False\n    return bool(UNUSUAL_PORT_PATTERN.search(url))\n\n\ndef get_hostname(url: str) -> Optional[str]:\n    \"\"\"Extract the hostname from a URL.\"\"\"\n    if not url:\n        return None\n    # Strip protocol\n    url_clean = url\n    if url_clean.startswith('https://'):\n        url_clean = url_clean[10:]\n    elif url_clean.startswith('http://'):\n        url_clean = url_clean[7:]\n    # Get hostname (up to first / or end)\n    slash_idx = url_clean.find('/')\n    if slash_idx > 0:\n        return url_clean[:slash_idx]\n    return url_clean\n\n\ndef get_domain(hostname: str) -> Optional[str]:\n    \"\"\"Extract the registered domain from a hostname.\"\"\"\n    if not hostname:\n        return None\n    parts = hostname.split('.')\n    if len(parts) >= 2:\n        # Conservative: return last 2 parts as domain\n        return '.'.join(parts[-2:])\n    return hostname\n\"\n
+"""URL parser for the URL and phishing detection engine.
+
+Provides robust URL extraction and normalization without modifying original
+content, executing JavaScript, or following redirects. This module never
+performs network requests.
+"""
+from __future__ import annotations
+
+import re
+from typing import Optional
+
+
+# Regex pattern for URL extraction (per Phase 13 spec).
+# Matches http/https URLs embedded in text, with support for subdomains,
+# query parameters, ports, and various URL formats.
+URL_PATTERN = re.compile(
+    r'(?i)\bhttps?://'  # http:// or https://
+    r'(?:'
+    r'(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}'  # domain name
+    r'|'
+    r'(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}'
+    r'(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)'  # IPv4
+    r'|'
+    r'localhost'
+    r')'
+    r'(?::[0-9]{1,5})?'  # optional port
+    r'(?:/[^\s]*)?',  # path/query
+)
+
+
+# Pattern for standalone URLs that start with www and no scheme.
+STANDALONE_URL_PATTERN = re.compile(
+    r'(?i)\bwww\.[a-zA-Z0-9][a-zA-Z0-9-]*(?:\.[a-zA-Z]{2,})+[^\s]*',
+)
+
+
+# Pattern for detecting IP-based hostnames (not domain names).
+IP_HOSTNAME_PATTERN = re.compile(
+    r'(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}'
+    r'(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)',
+)
+
+
+# Pattern for detecting URL shorteners.
+SHORTENER_PATTERN = re.compile(
+    r'(?i)(?:^|\.)(?:bit\.ly|tinyurl\.com|goo\.gl|t\.co|is\.gd|buff\.ly|adf\.ly)(?:/|$)',
+)
+
+
+# Pattern for detecting excessive subdomains (3+ subdomain levels).
+EXCESSIVE_SUBDOMAIN_PATTERN = re.compile(
+    r'(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?\.){3,}[a-zA-Z]{2,}',
+)
+
+
+# Pattern for detecting punycode/homograph indicators.
+PUNYCODE_PATTERN = re.compile(r'(?i)xn--')
+
+
+# Pattern for detecting embedded credentials in URLs.
+CREDENTIAL_PATTERN = re.compile(
+    r'(?i)(?:username|user|password|passwd|token|secret|api_key|apikey)=[^&\s]+',
+)
+
+
+# Pattern for detecting suspicious query parameters.
+SUSPICIOUS_QUERY_PATTERN = re.compile(
+    r'(?i)(?:login|verify|signin|signout|session|token|passwd|credential)',
+)
+
+
+# Common legitimate TLDs (for conservative matching).
+LEGITIMATE_TLDS = {
+    'com', 'org', 'net', 'edu', 'gov', 'mil', 'int',
+    'co', 'ai', 'io', 'app', 'dev', 'blog', 'info', 'biz',
+    'in', 'us', 'uk', 'de', 'jp', 'cn', 'fr', 'ca', 'au',
+}
+
+
+def _strip_trailing_punctuation(value: str) -> str:
+    """Trim punctuation that commonly follows a URL in prose."""
+    return value.rstrip('.,;:!?)]}\'"')
+
+
+def extract_urls(content: str) -> list[dict[str, str]]:
+    """Extract URLs from content without modifying the original text.
+
+    Identifies HTTP/HTTPS URLs and standalone ``www.`` URLs embedded in text.
+    Returns extracted URLs with their position and normalized form, deduplicated
+    case-insensitively by URL string.
+
+    Args:
+        content: The text content to search for URLs.
+
+    Returns:
+        List of dicts with ``url``, ``start``, ``end`` and
+        ``original_segment`` keys.
+    """
+    if not content:
+        return []
+
+    urls: list[dict[str, str]] = []
+    occupied: list[tuple[int, int]] = []
+
+    for match in URL_PATTERN.finditer(content):
+        raw = match.group(0)
+        start, end = match.start(), match.end()
+        occupied.append((start, end))
+        normalized = _strip_trailing_punctuation(raw)
+        urls.append({
+            'url': normalized,
+            'start': str(start),
+            'end': str(end),
+            'original_segment': raw,
+        })
+
+    for match in STANDALONE_URL_PATTERN.finditer(content):
+        start, end = match.start(), match.end()
+        # A www URL inside an already matched http(s) URL must not be counted twice.
+        if any(existing_start <= start < existing_end for existing_start, existing_end in occupied):
+            continue
+        raw = match.group(0)
+        normalized = _strip_trailing_punctuation(raw)
+        urls.append({
+            'url': normalized,
+            'start': str(start),
+            'end': str(end),
+            'original_segment': raw,
+        })
+
+    seen: set[str] = set()
+    unique_urls: list[dict[str, str]] = []
+    for item in urls:
+        key = item['url'].lower()
+        if key not in seen:
+            seen.add(key)
+            unique_urls.append(item)
+
+    return unique_urls
+
+
+def normalize_url(url: str) -> str:
+    """Normalize a URL safely for analysis.
+
+    Removes the fragment, surrounding whitespace, and trailing punctuation while
+    preserving the scheme, host, port, path and query string. The original string
+    is never modified in place.
+
+    Args:
+        url: The URL to normalize.
+
+    Returns:
+        Normalized URL string suitable for analysis.
+    """
+    if not url:
+        return ""
+
+    normalized = url.strip()
+
+    # Remove fragment (#section).
+    if '#' in normalized:
+        normalized = normalized.split('#', 1)[0]
+
+    # Remove trailing punctuation that is usually sentence punctuation.
+    normalized = _strip_trailing_punctuation(normalized).strip()
+    return normalized
+
+
+def get_hostname(url: str) -> Optional[str]:
+    """Extract the lowercase hostname from a URL, without scheme or port."""
+    if not url:
+        return None
+
+    value = url.strip()
+    if value.lower().startswith('https://'):
+        value = value[8:]
+    elif value.lower().startswith('http://'):
+        value = value[7:]
+
+    # Remove userinfo (user:pass@host).
+    if '@' in value:
+        value = value.rsplit('@', 1)[1]
+
+    # Stop at path, query or fragment.
+    host = re.split(r'[/?#]', value, maxsplit=1)[0]
+
+    # Strip port. IPv6 literals are not supported by this conservative parser.
+    host = re.sub(r':[0-9]{1,5}$', '', host)
+
+    host = host.strip(' .').lower()
+    return host or None
+
+
+def get_domain(hostname: str) -> Optional[str]:
+    """Extract the registered domain from a hostname.
+
+    Uses a conservative last-two-labels approach. Public-suffix handling is
+    intentionally out of scope; the result is used only for explainable
+    heuristics, never for authorization decisions.
+    """
+    if not hostname:
+        return None
+
+    host = get_hostname(hostname) if '://' in hostname else hostname.strip().strip('.').lower()
+    if not host or IP_HOSTNAME_PATTERN.fullmatch(host):
+        return None
+
+    parts = host.split('.')
+    if len(parts) >= 2:
+        return '.'.join(parts[-2:])
+    return host
+
+
+def is_ip_based_hostname(url: str) -> bool:
+    """Check if the URL hostname is an IPv4 address rather than a domain."""
+    if not url:
+        return False
+    host = get_hostname(url) or ''
+    return bool(IP_HOSTNAME_PATTERN.fullmatch(host))
+
+
+def is_shortened_url(url: str) -> bool:
+    """Check if the URL uses a known URL shortener."""
+    if not url:
+        return False
+    host = get_hostname(url) or ''
+    return bool(SHORTENER_PATTERN.search(host))
+
+
+def has_excessive_subdomains(hostname: str) -> bool:
+    """Check if the hostname has three or more subdomain levels."""
+    if not hostname:
+        return False
+    host = get_hostname(hostname) or ''
+    if IP_HOSTNAME_PATTERN.fullmatch(host):
+        return False
+    labels = [label for label in host.split('.') if label]
+    # label + domain + tld => 3 labels; 4+ labels means 3+ subdomains.
+    return len(labels) >= 4
+
+
+def has_punycode(hostname: str) -> bool:
+    """Check if the hostname contains punycode indicators."""
+    if not hostname:
+        return False
+    host = get_hostname(hostname) or ''
+    return bool(PUNYCODE_PATTERN.search(host))
+
+
+def has_embedded_credentials(url: str) -> bool:
+    """Check if the URL has embedded credentials (username/password/token)."""
+    if not url:
+        return False
+    return bool(CREDENTIAL_PATTERN.search(url))
+
+
+def has_suspicious_query(url: str) -> bool:
+    """Check if the URL query string has suspicious parameter names."""
+    if not url or '?' not in url:
+        return False
+    query = url.split('?', 1)[1]
+    return bool(SUSPICIOUS_QUERY_PATTERN.search(query))
+
+
+def has_unusual_port(url: str) -> bool:
+    """Check if the URL uses a port outside 80, 443 or 8080."""
+    if not url:
+        return False
+
+    value = url.strip()
+    if value.lower().startswith('https://'):
+        value = value[8:]
+    elif value.lower().startswith('http://'):
+        value = value[7:]
+
+    if '@' in value:
+        value = value.rsplit('@', 1)[1]
+
+    authority = re.split(r'[/?#]', value, maxsplit=1)[0]
+    match = re.search(r':([0-9]{1,5})$', authority)
+    if not match:
+        return False
+
+    port = int(match.group(1))
+    return port not in (80, 443, 8080) and 1 <= port <= 65535

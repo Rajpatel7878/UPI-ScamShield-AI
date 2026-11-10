@@ -1,4 +1,4 @@
-import { AppContext } from './AppContext.js'
+import { AppContext, AuthProvider } from './AppContext.jsx'
 import { useHealthCheck } from '../hooks/useHealthCheck.js'
 import {
   APP_DESCRIPTION,
@@ -18,5 +18,9 @@ export function AppProvider({ children }) {
     health,
   }
 
-  return <AppContext.Provider value={value}>{children}</AppContext.Provider>
+  return (
+    <AppContext.Provider value={value}>
+      <AuthProvider>{children}</AuthProvider>
+    </AppContext.Provider>
+  )
 }

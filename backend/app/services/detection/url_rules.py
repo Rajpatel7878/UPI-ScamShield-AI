@@ -1,1 +1,342 @@
-"""URL rules for the URL and phishing detection engine.\n\nCentralized, maintainable rule definitions for detecting suspicious URL indicators.\nEach rule contains a unique rule ID, name, category, description, severity,\ndetection pattern, explanation, recommended safety action, and score contribution.\n\"\"\"\nfrom __future__ import annotations\n\nfrom dataclasses import dataclass, field\nfrom typing import Any, Callable, Optional\nimport re\n\nfrom .url_parser import (\n    EXCESSIVE_SUBDOMAIN_PATTERN,\n    CREDENTIAL_PATTERN,\n    IP_HOSTNAME_PATTERN,\n    SHORTENER_PATTERN,\n    EXCESSIVE_SUBDOMAIN_PATTERN,\n    get_domain,\n    get_hostname,\n    has_embeded_credentials,\n    has_excessive_subdomains,\n    has_punycode,\n    has_suspicious_query,\n    has_unusual_port,\n    is_ip_based_hostname,\n    is_shortened_url,\n    normalize_url,\n)\n\n\nRULE_ID_COUNTER = 2000\n\n\ndef _next_rule_id() -> int:\n    \"\"\"Generate the next unique rule ID.\"\"\"\n    global RULE_ID_COUNTER\n    RULE_ID_COUNTER += 1\n    return RULE_ID_COUNTER\n\n\n@dataclass\nclass URLDetectionRule:\n    \"\"\"A single URL detection rule for the phishing engine.\n    \n    Rules are data classes so they can be easily serialized, filtered,\nextended, or loaded from configuration files.\n    \"\"\"\n    rule_id: int\n    name: str\n    category: str\n    description: str\n    severity: str  # low, medium, high, critical\n    pattern: str  # regex pattern or rule type\n    explanation: str  # user-facing explanation\n    action: str  # recommended safety action\n    score_contribution: int  # points added if rule matches\n    \n    # Rule type: 'pattern', 'ip_based', 'shortener', 'brand', 'punycode', etc.\n    rule_type: str = \"pattern\"\n    \n    # Optional: case-insensitive flag\n    case_insensitive: bool = True\n\n\n# =============================================================================\n# URL Detection Rule Registry\n# =============================================================================\n\n# All 13 detection categories from the Phase 13 specification:\n# 1. IP address used instead of a normal domain\n# 2. Excessive or unusual subdomains\n# 3. Lookalike brand names and common misspellings\n# 4. Suspicious use of brand names in unrelated domains\n# 5. URL shorteners\n# 6. Unusual top-level domains\n# 7. Excessive URL length\n# 8. Misleading URL paths\n# 9. Suspicious query parameters\n# 10. Embedded username/password credentials\n# 11. Unusual ports\n# 12. Homograph and punycode indicators\n# 13. HTTPS-related misconceptions\n\nRULES: list[URLDetectionRule] = [\n    # --- Rule 1: IP address used instead of a normal domain ---\n    URLDetectionRule(\n        rule_id=_next_rule_id(),\n        name=\"IP-based Hostname\",\n        category=\"Suspicious Link\",\n        description=\"URL hostname is an IP address rather than a domain name\",\n        severity=\"high\",\n        pattern=\"ip_based\",\n        explanation=\"The URL uses an IP address as the hostname. This is suspicious in context and may indicate a phishing attempt.\",\n        action=\"Do not enter credentials. Verify the website through your bank's official app or website.\",\n        score_contribution=20,\n    ),\n    \n    # --- Rule 2: Excessive or unusual subdomains ---\n    URLDetectionRule(\n        rule_id=_next_rule_id(),\n        name=\"Excessive Subdomains\",\n        category=\"Suspicious Link\",\n        description=\"URL hostname has 3+ subdomain levels\",\n        severity=\"medium\",\n        pattern=\"excessive_subdomains\",\n        explanation=\"The URL has an unusual number of subdomains (3+ levels). This can indicate a spoofed or malicious domain.\",\n        action=\"Verify the website domain. Be cautious of URLs with many subdomain levels.\",\n        score_contribution=10,\n    ),\n    \n    # --- Rule 3: Lookalike brand names and common misspellings ---\n    URLDetectionRule(\n        rule_id=_next_rule_id(),\n        name=\"Brand Impersonation (Lookalike)\",\n        category=\"Brand Impersonation\",\n        description=\"URL hostname contains a brand name with common misspelling or slight variation\",\n        severity=\"high\",\n        pattern=\"brand_impersonation\",\n        explanation=\"The URL hostname impersonates a well-known brand with a slight spelling variation. This is a common phishing technique.\",\n        action=\"Do not enter credentials. Access the service directly through your official app or website.\",\n        score_contribution=30,\n    ),\n    \n    # --- Rule 4: Suspicious use of brand names in unrelated domains ---\n    URLDetectionRule(\n        rule_id=_next_rule_id(),\n        name=\"Brand Name in Unrelated Domain\",\n        category=\"Brand Impersonation\",\n        description=\"URL hostname contains a brand name not related to the actual service\",\n        severity=\"medium\",\n        pattern=\"unrelated_brand\",\n        explanation=\"The URL contains a brand name (e.g., Google, PayPal) in a domain that doesn't belong to that brand. This may be impersonation.\",\n        action=\"Verify the website legitimacy. Do not enter credentials unless you've confirmed the site's authenticity.\",\n        score_contribution=20,\n    ),\n    \n    # --- Rule 5: URL shorteners ---\n    URLDetectionRule(\n        rule_id=_next_rule_id(),\n        name=\"URL Shortener\",\n        category=\"Suspicious Link\",\n        description=\"URL uses a known URL shortener service\",\n        severity=\"medium\",\n        pattern=\"shortener\",\n        explanation=\"The URL uses a shortening service (e.g., bit.ly, tinyurl.com). URL shorteners hide the true destination and are a common phishing tactic.\",\n        action=\"Do not click the link. Visit the service directly through your official app or website.\",\n        score_contribution=10,\n    ),\n    \n    # --- Rule 6: Unusual TLD ---\n    URLDetectionRule(\n        rule_id=_next_rule_id(),\n        name=\"Unusual TLD\",\n        category=\"Suspicious Link\",\n        description=\"URL hostname has a non-standard or unusual top-level domain\",\n        severity=\"low\",\n        pattern=\"unusual_tld\",\n        explanation=\"The URL uses a top-level domain that is not among the most common (e.g., .xyz, .top, .club). While not inherently malicious, it can be suspicious in context.\",\n        action=\"Verify the website legitimacy. Unusual TLDs can be used by both legitimate and illegitimate sites.\",\n        score_contribution=5,\n    ),\n    \n    # --- Rule 7: Excessive URL length ---\n    URLDetectionRule(\n        rule_id=_next_rule_id(),\n        name=\"Excessively Long URL\",\n        category=\"Suspicious Link\",\n        description=\"URL string exceeds 200 characters\",\n        severity=\"low\",\n        pattern=\"long_url\",\n        explanation=\"The URL is excessively long (over 200 characters). Very long URLs can be used to hide malicious content or confuse users.\",\n        action=\"Be cautious. Hover over the link to inspect the full destination before clicking.\",\n        score_contribution=10,\n    ),\n    \n    # --- Rule 8: Misleading URL path ---\n    URLDetectionRule(\n        rule_id=_next_rule_id(),\n        name=\"Misleading URL Path\",\n        category=\"Suspicious Link\",\n        description=\"URL path contains terms that mislead about the actual destination\",\n        severity=\"medium\",\n        pattern=\"misleading_path\",\n        explanation=\"The URL path contains terms designed to mislead about the destination (e.g., 'secure', 'bank', 'login' leading to a non-financial site).\",\n        action=\"Verify the actual destination. Do not assume terms like 'secure' or 'bank' guarantee legitimacy.\",\n        score_contribution=15,\n    ),\n    \n    # --- Rule 9: Suspicious query parameters ---\n    URLDetectionRule(\n        rule_id=_next_rule_id(),\n        name=\"Suspicious Query Parameters\",\n        category=\"Suspicious Link\",\n        description=\"URL query parameters include suspicious terms (login, verify, session, etc.)\",\n        severity=\"medium\",\n        pattern=\"suspicious_query\",\n        explanation=\"The URL query string contains terms commonly used in phishing (e.g., login, verify, session, signin). These may be attempting to steal credentials.\",\n        action=\"Do not enter credentials. Verify the request independently through your bank's official channel.\",\n        score_contribution=15,\n    ),\n    \n    # --- Rule 10: Embedded credentials ---\n    URLDetectionRule(\n        rule_id=_next_rule_id(),\n        name=\"Embedded Credentials\",\n        category=\"Credential Theft\",\n        description=\"URL contains embedded username, password, token, or secret parameters\",\n        severity=\"critical\",\n        pattern=\"embedded_credentials\",\n        explanation=\"The URL contains embedded credentials (username, password, token, or secret) in query parameters. This is a direct attempt to obtain sensitive authentication information.\",\n        action=\"Never enter credentials from a URL. Legitimate services never ask you to paste credentials from a link.\",\n        score_contribution=30,\n    ),\n    \n    # --- Rule 11: Unusual port ---\n    URLDetectionRule(\n        rule_id=_next_rule_id(),\n        name=\"Unusual Port\",\n        category=\"Suspicious Link\",\n        description=\"URL uses a port outside the common 80, 443, 8080\",\n        severity=\"medium\",\n        pattern=\"unusual_port\",\n        explanation=\"The URL uses a non-standard port. While some legitimate services use unusual ports, this can also indicate a custom or potentially malicious server.\",\n        action=\"Verify the service legitimacy. Unusual ports can be used by both legitimate and illegitimate services.\",\n        score_contribution=15,\n    ),\n    \n    # --- Rule 12: Punycode / Homograph ---\n    URLDetectionRule(\n        rule_id=_next_rule_id(),\n        name=\"Punycode / Homograph\",\n        category=\"Suspicious Link\",\n        description=\"URL hostname contains punycode (xn--) indicator\",\n        severity=\"medium\",\n        pattern=\"punycode\",\n        explanation=\"The URL hostname contains punycode encoding (xn--). This can indicate internationalized domain name spoofing or homograph attacks.\",\n        action=\"Be cautious of internationalized domain names. Verify the site through your official app or website.\",\n        score_contribution=20,\n    ),\n    \n    # --- Rule 13: HTTPS misconception ---\n    URLDetectionRule(\n        rule_id=_next_rule_id(),\n        name=\"HTTPS Misconception\",\n        category=\"Suspicious Link\",\n        description=\"URL uses HTTPS but may still be malicious\",\n        severity=\"low\",\n        pattern=\"https_misconception\",\n        explanation=\"The URL uses HTTPS (HTTPS://), but HTTPS alone does not prove a website is safe or legitimate. Scammers also use HTTPS to appear trustworthy.\",\n        action=\"Do not assume HTTPS means the site is safe. Always verify the domain and sender independently.\",\n        score_contribution=5,\n    ),\n]\n\n\n# Rule name to rule object mapping for quick lookup\nRULE_NAME_MAP: dict[str, URLDetectionRule] = {\n    rule.name: rule for rule in RULES\n}\n\n\n# Category aggregation rules: which categories should be grouped together\nCATEGORY_GROUPS = {\n    \"Suspicious Link\": [\n        \"IP-based Hostname\",\n        \"Excessive Subdomains\",\n        \"URL Shortener\",\n        \"Unusual TLD\",\n        \"Excessively Long URL\",\n        \"Misleading URL Path\",\n        \"Suspicious Query Parameters\",\n        \"Unusual Port\",\n        \"Punycode / Homograph\",\n        \"HTTPS Misconception\",\n    ],\n    \"Brand Impersonation\": [\n        \"Brand Impersonation (Lookalike)\",\n        \"Brand Name in Unrelated Domain\",\n    ],\n    \"Credential Theft\": [\n        \"Embedded Credentials\",\n    ],\n}\n\n\ndef get_rule_by_id(rule_id: int) -> URLDetectionRule | None:\n    \"\"\"Get a rule by its unique ID.\"\"\"\n    for rule in RULES:\n        if rule.rule_id == rule_id:\n            return rule\n    return None\n\n\ndef get_rules_by_category(category: str) -> list[URLDetectionRule]:\n    \"\"\"Get all rules belonging to a specific category.\"\"\"\n    return [rule for rule in RULES if rule.category == category]\n\n\ndef get_all_rules() -> list[URLDetectionRule]:\n    \"\"\"Get all registered URL detection rules.\"\"\"\n    return RULES.copy()\n\n\ndef get_rule_names_by_category(category: str) -> list[str]:\n    \"\"\"Get rule names belonging to a specific category.\"\"\"\n    rules = get_rules_by_category(category)\n    return [rule.name for rule in rules]\n\n\n# Score contribution mapping for quick lookup\nSCORE_CONTRIBUTION_MAP: dict[str, int] = {\n    rule.name: rule.score_contribution for rule in RULES\n}\n\n\n# Severity mapping for quick lookup\nSEVERITY_MAP: dict[str, str] = {\n    rule.name: rule.severity for rule in RULES\n}\n\n\ndef validate_rule_severity(severity: str) -> str:\n    \"\"\"Validate URL detection rule severity.\"\"\"\n    valid_severities = {\"low\", \"medium\", \"high\", \"critical\"}\n    sev_lower = severity.lower().strip()\n    if sev_lower not in valid_severities:\n        raise ValueError(f\"Invalid severity: {severity}. Must be one of {valid_severities}\")\n    return sev_lower\n\n\ndef validate_rule_type(rule_type: str) -> str:\n    \"\"\"Validate URL detection rule type.\"\"\"\n    valid_types = {\"pattern\", \"ip_based\", \"shortener\", \"brand\", \"punycode\", \"long_url\", \"misleading_path\", \"suspicious_query\", \"embedded_credentials\", \"unusual_port\", \"https_misconception\"}\n    if rule_type not in valid_types:\n        raise ValueError(f\"Invalid rule type: {rule_type}. Must be one of {valid_types}\")\n    return rule_type\n
+"""URL rules for the URL and phishing detection engine.
+
+Centralized, maintainable rule definitions for detecting suspicious URL indicators.
+Each rule contains a unique rule ID, name, category, description, severity,
+detection pattern, explanation, recommended safety action, and score contribution.
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Any, Callable, Optional
+import re
+
+from .url_parser import (
+    EXCESSIVE_SUBDOMAIN_PATTERN,
+    CREDENTIAL_PATTERN,
+    IP_HOSTNAME_PATTERN,
+    SHORTENER_PATTERN,
+    LEGITIMATE_TLDS,
+    get_domain,
+    get_hostname,
+    has_embedded_credentials,
+    has_excessive_subdomains,
+    has_punycode,
+    has_suspicious_query,
+    has_unusual_port,
+    is_ip_based_hostname,
+    is_shortened_url,
+    normalize_url,
+)
+
+
+RULE_ID_COUNTER = 2000
+
+
+def _next_rule_id() -> int:
+    """Generate the next unique rule ID."""
+    global RULE_ID_COUNTER
+    RULE_ID_COUNTER += 1
+    return RULE_ID_COUNTER
+
+
+@dataclass
+class URLDetectionRule:
+    """A single URL detection rule for the phishing engine.
+
+    Rules are data classes so they can be easily serialized, filtered,
+extended, or loaded from configuration files.
+    """
+    rule_id: int
+    name: str
+    category: str
+    description: str
+    severity: str  # low, medium, high, critical
+    pattern: str  # regex pattern or rule type
+    explanation: str  # user-facing explanation
+    action: str  # recommended safety action
+    score_contribution: int  # points added if rule matches
+
+    # Rule type: 'pattern', 'ip_based', 'shortener', 'brand', 'punycode', etc.
+    rule_type: str = "pattern"
+
+    # Optional: case-insensitive flag
+    case_insensitive: bool = True
+
+
+# =============================================================================
+# URL Detection Rule Registry
+# =============================================================================
+
+# All 13 detection categories from the Phase 13 specification:
+# 1. IP address used instead of a normal domain
+# 2. Excessive or unusual subdomains
+# 3. Lookalike brand names and common misspellings
+# 4. Suspicious use of brand names in unrelated domains
+# 5. URL shorteners
+# 6. Unusual top-level domains
+# 7. Excessive URL length
+# 8. Misleading URL paths
+# 9. Suspicious query parameters
+# 10. Embedded username/password credentials
+# 11. Unusual ports
+# 12. Homograph and punycode indicators
+# 13. HTTPS-related misconceptions
+
+RULES: list[URLDetectionRule] = [
+    # --- Rule 1: IP address used instead of a normal domain ---
+    URLDetectionRule(
+        rule_id=_next_rule_id(),
+        name="IP-based Hostname",
+        category="Suspicious Link",
+        description="URL hostname is an IP address rather than a domain name",
+        severity="high",
+        pattern="ip_based_hostname",
+        explanation="The URL uses an IP address as the hostname. This is suspicious in context and may indicate a phishing attempt.",
+        action="Do not enter credentials. Verify the website through your bank's official app or website.",
+        score_contribution=20,
+    ),
+
+    # --- Rule 2: Excessive or unusual subdomains ---
+    URLDetectionRule(
+        rule_id=_next_rule_id(),
+        name="Excessive Subdomains",
+        category="Suspicious Link",
+        description="URL hostname has 3+ subdomain levels",
+        severity="medium",
+        pattern="excessive_subdomains",
+        explanation="The URL has an unusual number of subdomains (3+ levels). This can indicate a spoofed or malicious domain.",
+        action="Verify the website domain. Be cautious of URLs with many subdomain levels.",
+        score_contribution=10,
+    ),
+
+    # --- Rule 3: Lookalike brand names and common misspellings ---
+    URLDetectionRule(
+        rule_id=_next_rule_id(),
+        name="Brand Impersonation (Lookalike)",
+        category="Brand Impersonation",
+        description="URL hostname contains a brand name with common misspelling or slight variation",
+        severity="high",
+        pattern="brand_impersonation",
+        explanation="The URL hostname impersonates a well-known brand with a slight spelling variation. This is a common phishing technique.",
+        action="Do not enter credentials. Access the service directly through your official app or website.",
+        score_contribution=30,
+    ),
+
+    # --- Rule 4: Suspicious use of brand names in unrelated domains ---
+    URLDetectionRule(
+        rule_id=_next_rule_id(),
+        name="Brand Name in Unrelated Domain",
+        category="Brand Impersonation",
+        description="URL hostname contains a brand name not related to the actual service",
+        severity="medium",
+        pattern="unrelated_brand",
+        explanation="The URL contains a brand name (e.g., Google, PayPal) in a domain that doesn't belong to that brand. This may be impersonation.",
+        action="Verify the website legitimacy. Do not enter credentials unless you've confirmed the site's authenticity.",
+        score_contribution=20,
+    ),
+
+    # --- Rule 5: URL shorteners ---
+    URLDetectionRule(
+        rule_id=_next_rule_id(),
+        name="URL Shortener",
+        category="Suspicious Link",
+        description="URL uses a known URL shortener service",
+        severity="medium",
+        pattern="shortener",
+        explanation="The URL uses a shortening service (e.g., bit.ly, tinyurl.com). URL shorteners hide the true destination and are a common phishing tactic.",
+        action="Do not click the link. Visit the service directly through your official app or website.",
+        score_contribution=10,
+    ),
+
+    # --- Rule 6: Unusual TLD ---
+    URLDetectionRule(
+        rule_id=_next_rule_id(),
+        name="Unusual TLD",
+        category="Suspicious Link",
+        description="URL hostname has a non-standard or unusual top-level domain",
+        severity="low",
+        pattern="unusual_tld",
+        explanation="The URL uses a top-level domain that is not among the most common (e.g., .xyz, .top, .club). While not inherently malicious, it can be suspicious in context.",
+        action="Verify the website legitimacy. Unusual TLDs can be used by both legitimate and illegitimate sites.",
+        score_contribution=5,
+    ),
+
+    # --- Rule 7: Excessive URL length ---
+    URLDetectionRule(
+        rule_id=_next_rule_id(),
+        name="Excessively Long URL",
+        category="Suspicious Link",
+        description="URL string exceeds 200 characters",
+        severity="low",
+        pattern="long_url",
+        explanation="The URL is excessively long (over 200 characters). Very long URLs can be used to hide malicious content or confuse users.",
+        action="Be cautious. Hover over the link to inspect the full destination before clicking.",
+        score_contribution=10,
+    ),
+
+    # --- Rule 8: Misleading URL path ---
+    URLDetectionRule(
+        rule_id=_next_rule_id(),
+        name="Misleading URL Path",
+        category="Suspicious Link",
+        description="URL path contains terms that mislead about the actual destination",
+        severity="medium",
+        pattern="misleading_path",
+        explanation="The URL path contains terms designed to mislead about the destination (e.g., 'secure', 'bank', 'login' leading to a non-financial site).",
+        action="Verify the actual destination. Do not assume terms like 'secure' or 'bank' guarantee legitimacy.",
+        score_contribution=15,
+    ),
+
+    # --- Rule 9: Suspicious query parameters ---
+    URLDetectionRule(
+        rule_id=_next_rule_id(),
+        name="Suspicious Query Parameters",
+        category="Suspicious Link",
+        description="URL query parameters include suspicious terms (login, verify, session, etc.)",
+        severity="medium",
+        pattern="suspicious_query",
+        explanation="The URL query string contains terms commonly used in phishing (e.g., login, verify, session, signin). These may be attempting to steal credentials.",
+        action="Do not enter credentials. Verify the request independently through your bank's official channel.",
+        score_contribution=15,
+    ),
+
+    # --- Rule 10: Embedded credentials ---
+    URLDetectionRule(
+        rule_id=_next_rule_id(),
+        name="Embedded Credentials",
+        category="Credential Theft",
+        description="URL contains embedded username, password, token, or secret parameters",
+        severity="critical",
+        pattern="embedded_credentials",
+        explanation="The URL contains embedded credentials (username, password, token, or secret) in query parameters. This is a direct attempt to obtain sensitive authentication information.",
+        action="Never enter credentials from a URL. Legitimate services never ask you to paste credentials from a link.",
+        score_contribution=30,
+    ),
+
+    # --- Rule 11: Unusual port ---
+    URLDetectionRule(
+        rule_id=_next_rule_id(),
+        name="Unusual Port",
+        category="Suspicious Link",
+        description="URL uses a port outside the common 80, 443, 8080",
+        severity="medium",
+        pattern="unusual_port",
+        explanation="The URL uses a non-standard port. While some legitimate services use unusual ports, this can also indicate a custom or potentially malicious server.",
+        action="Verify the service legitimacy. Unusual ports can be used by both legitimate and illegitimate services.",
+        score_contribution=15,
+    ),
+
+    # --- Rule 12: Punycode / Homograph ---
+    URLDetectionRule(
+        rule_id=_next_rule_id(),
+        name="Punycode / Homograph",
+        category="Suspicious Link",
+        description="URL hostname contains punycode (xn--) indicator",
+        severity="medium",
+        pattern="punycode",
+        explanation="The URL hostname contains punycode encoding (xn--). This can indicate internationalized domain name spoofing or homograph attacks.",
+        action="Be cautious of internationalized domain names. Verify the site through your official app or website.",
+        score_contribution=20,
+    ),
+
+    # --- Rule 13: HTTPS misconception ---
+    URLDetectionRule(
+        rule_id=_next_rule_id(),
+        name="HTTPS Misconception",
+        category="Suspicious Link",
+        description="URL uses HTTPS but may still be malicious",
+        severity="low",
+        pattern="https_misconception",
+        explanation="The URL uses HTTPS (HTTPS://), but HTTPS alone does not prove a website is safe or legitimate. Scammers also use HTTPS to appear trustworthy.",
+        action="Do not assume HTTPS means the site is safe. Always verify the domain and sender independently.",
+        score_contribution=5,
+    ),
+]
+
+
+# Rule name to rule object mapping for quick lookup
+RULE_NAME_MAP: dict[str, URLDetectionRule] = {
+    rule.name: rule for rule in RULES
+}
+
+
+# Category aggregation rules: which categories should be grouped together
+CATEGORY_GROUPS = {
+    "Suspicious Link": [
+        "IP-based Hostname",
+        "Excessive Subdomains",
+        "URL Shortener",
+        "Unusual TLD",
+        "Excessively Long URL",
+        "Misleading URL Path",
+        "Suspicious Query Parameters",
+        "Unusual Port",
+        "Punycode / Homograph",
+        "HTTPS Misconception",
+    ],
+    "Brand Impersonation": [
+        "Brand Impersonation (Lookalike)",
+        "Brand Name in Unrelated Domain",
+    ],
+    "Credential Theft": [
+        "Embedded Credentials",
+    ],
+}
+
+
+def get_rule_by_id(rule_id: int) -> URLDetectionRule | None:
+    """Get a rule by its unique ID."""
+    for rule in RULES:
+        if rule.rule_id == rule_id:
+            return rule
+    return None
+
+
+def get_rules_by_category(category: str) -> list[URLDetectionRule]:
+    """Get all rules belonging to a specific category."""
+    return [rule for rule in RULES if rule.category == category]
+
+
+def get_all_rules() -> list[URLDetectionRule]:
+    """Get all registered URL detection rules."""
+    return RULES.copy()
+
+
+def get_rule_names_by_category(category: str) -> list[str]:
+    """Get rule names belonging to a specific category."""
+    rules = get_rules_by_category(category)
+    return [rule.name for rule in rules]
+
+
+# Score contribution and severity maps, keyed by the stable rule pattern
+# (snake_case) rather than the display name. Display names are user-facing and
+# may be reworded; the pattern is the machine-readable rule identifier.
+SCORE_CONTRIBUTION_MAP: dict[str, int] = {
+    rule.pattern: rule.score_contribution for rule in RULES
+}
+
+SEVERITY_MAP: dict[str, str] = {
+    rule.pattern: rule.severity for rule in RULES
+}
+
+
+def validate_rule_severity(severity: str) -> str:
+    """Validate URL detection rule severity."""
+    valid_severities = {"low", "medium", "high", "critical"}
+    sev_lower = severity.lower().strip()
+    if sev_lower not in valid_severities:
+        raise ValueError(f"Invalid severity: {severity}. Must be one of {valid_severities}")
+    return sev_lower
+
+
+def validate_rule_type(rule_type: str) -> str:
+    """Validate URL detection rule type."""
+    valid_types = {
+        "pattern", "ip_based", "shortener", "brand", "brand_impersonation",
+        "unrelated_brand", "punycode", "long_url", "misleading_path",
+        "suspicious_query", "embedded_credentials", "unusual_port",
+        "unusual_tld", "excessive_subdomains", "https_misconception",
+    }
+    if rule_type not in valid_types:
+        raise ValueError(f"Invalid rule type: {rule_type}. Must be one of {valid_types}")
+    return rule_type

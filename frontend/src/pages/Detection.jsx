@@ -1,167 +1,164 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
+import { AlertTriangle, Info } from 'lucide-react'
 
-import { AppLayout } from '../components/layout/AppLayout.jsx'
 import {
-  ContentTypeSelector,
-  MessageInput,
-  URLInput,
-  ExampleMessages,
-  PrivacyNotice,
   AnalyzeButton,
   AnalysisResult,
+  ContentTypeSelector,
+  ExampleMessages,
+  MessageInput,
+  PrivacyNotice,
+  URLInput,
 } from '../components/detection/index.js'
+import { apiClient } from '../services/apiClient.js'
 
-/** Demo result shown after a simulated analyze click. */
-function DemoResult() {
-  const demoResult = {
-    riskScore: 78,
-    severity: 'high',
-    category: 'Phishing attempt',
-    summary:
-      'The submitted content contains patterns commonly associated with UPI phishing scams.',
-    indicators: [
-      'Urgent language prompting immediate action',
-      'Suspicious external link included',
-      'Request for verification via unfamiliar URL',
-    ],
-    recommendedActions: [
-      'Do not click any included links',
-      'Verify the request through your bank\'s official app',
-      'Delete the message and block the sender',
-    ],
-    safetyWarning:
-      'Never share your UPI PIN, OTP, or banking password. Legitimate banks never ask for these.',
-  }
-
-  return <AnalysisResult result={demoResult} hasResult={true} onDismiss={() => {}} />
+const CONTENT_TYPE_MAP = {
+  sms: 'sms',
+  whatsapp: 'whatsapp',
+  payment: 'payment_request',
+  url: 'url',
 }
 
-/** Detection page. */
+const SAFETY_WARNING =
+  'Never share your UPI PIN, OTP, or banking password. Legitimate banks and ' +
+  'support agents never ask for these to "verify" or "unlock" an account.'
+
+function toResult(data) {
+  return {
+    riskScore: Number(data.risk_score || 0),
+    severity: String(data.risk_level || 'Low').toLowerCase(),
+    category: data.category || 'General Scam',
+    summary: data.summary || '',
+    indicators: Array.isArray(data.indicators) ? data.indicators : [],
+    recommendedActions: Array.isArray(data.recommendations) ? data.recommendations : [],
+    safetyWarning: SAFETY_WARNING,
+    analysisType: data.analysis_type,
+    aiStatus: data.ai_analysis?.status,
+  }
+}
+
 export default function Detection() {
   const [contentType, setContentType] = useState('sms')
   const [inputValue, setInputValue] = useState('')
-  const [showResult, setShowResult] = useState(false)
+  const [result, setResult] = useState(null)
+  const [error, setError] = useState('')
   const [isAnalyzing, setIsAnalyzing] = useState(false)
-  const inputRef = useRef(null)
-
-  // Set example text when content type changes
-  useEffect(() => {
-    const examples = {
-      sms: 'Your bank account will be blocked today. Complete KYC immediately using this link.',
-      whatsapp: 'Congratulations! You have won a 5000 cashback reward. Pay a small processing fee to claim it.',
-      payment: 'Your UPI payment is pending. Share your OTP with our support agent to complete verification.',
-      url: 'https://example.com/upi-kyc-verify',
-    }
-    setInputValue(examples[contentType])
-  }, [contentType])
+  const resultRef = useRef(null)
 
   const handleContentTypeChange = (key) => {
     setContentType(key)
     setInputValue('')
+    setResult(null)
+    setError('')
   }
 
-  const handleInputChange = (value) => {
-    setInputValue(value)
-  }
-
-  const handleClear = () => {
-    setInputValue('')
-    setShowResult(false)
-    inputRef.current?.focus()
-  }
-
-  const handleAnalyze = () => {
+  const handleAnalyze = async () => {
     const text = inputValue.trim()
-    if (!text) return
+    if (!text || isAnalyzing) return
 
-    // Simulate analysis interaction - UI only, no real API
     setIsAnalyzing(true)
-    setTimeout(() => {
+    setError('')
+    setResult(null)
+
+    try {
+      const { data } = await apiClient.post('/detect/analyze', {
+        content: text,
+        content_type: CONTENT_TYPE_MAP[contentType] || 'general',
+      })
+      setResult(toResult(data))
+      requestAnimationFrame(() => {
+        resultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        resultRef.current?.focus?.()
+      })
+    } catch (requestError) {
+      setError(requestError?.message || 'Analysis failed. Please try again.')
+    } finally {
       setIsAnalyzing(false)
-      setShowResult(true)
-    }, 1000)
+    }
   }
 
   return (
-    <AppLayout>
-      {/* Demo data label */}
-      <p className="mt-3 text-xs text-slate-500">
-        <span className="font-medium">Demo Data</span> — All values and
-        demonstration results are illustrative and do not represent real
-        analysis outcomes until backend integration.
-      </p>
+    <div className="space-y-5">
+      <div className="rounded-card border border-brand-500/20 bg-brand-500/5 p-4">
+        <p className="type-body-sm flex items-start gap-2 text-slate-300">
+          <Info className="mt-0.5 size-4 shrink-0 text-brand-300" aria-hidden="true" />
+          <span>
+            Rule-based analysis runs on this server. URL analysis is passive and
+            never opens links. If a Gemini API key is configured, the message text
+            is also sent to Google Gemini; otherwise only local analysis is used.
+          </span>
+        </p>
+      </div>
 
-      {/* Demo result after analysis */}
-      {showResult && <DemoResult />}
-
-      {/* Detection Header */}
-      <header className="pt-6">
-        <div className="max-w-7xl mx-auto">
-          <h2 className="type-h2 mb-1">
-            Analyze Suspicious Content
-          </h2>
-          <p className="type-body text-muted mb-4">
-            Check suspicious UPI messages, payment requests, SMS, WhatsApp
-            messages, and URLs to understand potential security risks.
-          </p>
-          <p className="type-caption text-slate-500">
-            <strong>AI-assisted security analysis</strong> — This interface is
-            prepared for future AI integration. Currently, analysis is a local
-            demonstration.
-          </p>
-        </div>
-      </header>
-
-      {/* Content Type Selector */}
-      <section className="mb-6">
+      <section aria-labelledby="content-type-heading">
+        <h2 id="content-type-heading" className="type-label mb-2">
+          Content type
+        </h2>
         <ContentTypeSelector
           selectedKey={contentType}
           onSelect={handleContentTypeChange}
         />
       </section>
 
-      {/* Input Area */}
-      <section className="mb-6">
+      <section aria-label="Content to analyze">
         {contentType === 'url' ? (
           <URLInput
             value={inputValue}
-            onChange={handleInputChange}
-            onClear={handleClear}
+            onChange={setInputValue}
+            onClear={() => setInputValue('')}
             disabled={isAnalyzing}
           />
         ) : (
           <MessageInput
             contentType={contentType}
             value={inputValue}
-            onChange={handleInputChange}
-            onClear={handleClear}
+            onChange={setInputValue}
+            onClear={() => setInputValue('')}
             disabled={isAnalyzing}
           />
         )}
       </section>
 
-      {/* Example Content */}
-      {contentType !== 'url' && (
-        <section className="mb-6">
-          <ExampleMessages
-            contentType={contentType}
-            inputValue={inputValue}
-            onExampleSelect={() => {}}
-          />
-        </section>
-      )}
+      <ExampleMessages
+        contentType={contentType}
+        onInputChange={setInputValue}
+        onExampleSelect={() => {
+          setResult(null)
+          setError('')
+        }}
+        isLoading={isAnalyzing}
+      />
 
-      {/* Privacy Notice */}
       <PrivacyNotice />
 
-      {/* Analyze Button */}
-      <section className="mb-6">
-        <AnalyzeButton
-          isDisabled={!inputValue.trim() || isAnalyzing}
-          onClick={handleAnalyze}
-          showDemoNotice={!showResult}
+      <AnalyzeButton
+        isDisabled={!inputValue.trim()}
+        isLoading={isAnalyzing}
+        onClick={handleAnalyze}
+      />
+
+      {error && (
+        <div role="alert" className="flex items-start gap-2 rounded-lg border border-danger-500/30 bg-danger-500/10 p-4">
+          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-danger-400" aria-hidden="true" />
+          <p className="text-sm text-danger-400">{error}</p>
+        </div>
+      )}
+
+      {isAnalyzing && (
+        <div role="status" aria-live="polite" className="rounded-card border border-white/10 bg-navy-800 p-6">
+          <p className="type-body">Analyzing message and links…</p>
+          <div className="mt-3 h-2 w-2/3 animate-pulse rounded bg-white/10" />
+          <div className="mt-2 h-2 w-1/2 animate-pulse rounded bg-white/5" />
+        </div>
+      )}
+
+      <div ref={resultRef} tabIndex={-1} className="outline-none">
+        <AnalysisResult
+          result={result}
+          hasResult={Boolean(result)}
+          onDismiss={() => setResult(null)}
         />
-      </section>
-    </AppLayout>
+      </div>
+    </div>
   )
-}
+}

@@ -1,89 +1,76 @@
-"""FastAPI dependency injection for authentication."""
+"""FastAPI dependency injection for authentication and database sessions."""
 
+from collections.abc import Generator
 from typing import Optional
 
-from fastapi import HTTPException, Request, status
-from fastapi.params import Depends  # NOQA: F401
+from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy.orm import Session
 
 from app.core.security import decode_access_token
-from app.core.config import get_settings
-from app.database.connection import engine, session_factory
+from app.database.connection import session_factory
 from app.models.user import User
-from sqlalchemy import select
 
 
-def get_db_session() -> Session:
-    """Get database session for dependency injection."""
-    from app.database.init_db import init_db
-    init_db()
-    return session_factory()
+def get_db_session() -> Generator[Session, None, None]:
+    """Yield a database session and always close it.
+
+    A transaction that raises is rolled back before the session is closed. The
+    schema is created once at application startup, not on every request.
+    """
+    session = session_factory()
+    try:
+        yield session
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()
 
 
 reusable_bearer = HTTPBearer(auto_error=False)
+
+
+def _unauthorized(detail: str = "Authentication required") -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail=detail,
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+
+def _user_id_from_payload(payload: dict) -> int:
+    try:
+        user_id = int(payload.get("sub"))
+    except (TypeError, ValueError):
+        raise _unauthorized()
+    if user_id <= 0:
+        raise _unauthorized()
+    return user_id
 
 
 def get_current_user(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(reusable_bearer),
     db: Session = Depends(get_db_session),
 ) -> User:
-    """Get the current authenticated user from Bearer token.
+    """Return the authenticated user or raise 401.
 
-    This dependency:
-    1. Extracts the credentials from the Authorization header
-    2. Decodes and validates the JWT token
-    3. Retrieves the associated user from the database
-    4. Returns the user object or raises 401
-
-    Raises:
-        401: If token is missing, malformed, expired, or invalid
+    Validates the bearer token, loads the user by primary key and rejects
+    missing or inactive accounts. Resource ownership is enforced separately by
+    each route (for example, every scan query is scoped by ``user_id``).
     """
-    credentials: Optional[HTTPAuthorizationCredentials] = credentials
     if not credentials:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication required",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        raise _unauthorized()
 
-    # Decode the JWT token
     payload = decode_access_token(credentials.credentials)
     if payload is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication required",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        raise _unauthorized()
 
-    # Get user ID from token subject
-    user_id: int = payload.get("sub")
-    if user_id is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication required",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    # Retrieve user from database
-    from sqlalchemy import select
-    stmt = select(User).where(User.id == user_id)
-    user = db.scalar(stmt)
-
+    user = db.get(User, _user_id_from_payload(payload))
     if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication required",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    # Check account is active
+        raise _unauthorized()
     if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Account is inactive",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
+        raise _unauthorized("Account is inactive")
     return user
 
 
@@ -91,30 +78,20 @@ def get_optional_current_user(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(reusable_bearer),
     db: Session = Depends(get_db_session),
 ) -> Optional[User]:
-    """Get current user optionally (returns None if not authenticated).
-
-    Useful for routes that work both with and without authentication.
-    """
-    credentials: Optional[HTTPAuthorizationCredentials] = credentials
+    """Return the authenticated user, or None when no valid token is supplied."""
     if not credentials:
         return None
 
-    try:
-        payload = decode_access_token(credentials.credentials)
-        if payload is None:
-            return None
-
-        user_id: int = payload.get("sub")
-        if user_id is None:
-            return None
-
-        from sqlalchemy import select
-        stmt = select(User).where(User.id == user_id)
-        user = db.scalar(stmt)
-
-        if user is None or not user.is_active:
-            return None
-
-        return user
-    except Exception:
+    payload = decode_access_token(credentials.credentials)
+    if payload is None:
         return None
+
+    try:
+        user_id = _user_id_from_payload(payload)
+    except HTTPException:
+        return None
+
+    user = db.get(User, user_id)
+    if user is None or not user.is_active:
+        return None
+    return user
