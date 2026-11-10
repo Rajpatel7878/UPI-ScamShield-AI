@@ -59,6 +59,8 @@ backend/data/
 build/
 logs/
 *.log
+.vercel/
+.turbo/
 
 # ---------------------------------------------------------------------------
 # Editors & operating systems

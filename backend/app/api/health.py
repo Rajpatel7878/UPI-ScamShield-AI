@@ -1,11 +1,12 @@
 """System routes: API metadata and health checks."""
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Response, status
 from sqlalchemy import text
 
 from app.core.config import get_settings
 from app.database.connection import engine
 from app.schemas.health import HealthResponse, RootResponse, SystemInfoResponse
+from app.services.detection.gemini_service import is_gemini_configured
 
 router = APIRouter(tags=["system"])
 
@@ -31,7 +32,12 @@ async def read_root() -> RootResponse:
     summary="Service health check",
     description="Reports service availability and database connectivity.",
 )
-async def health_check() -> HealthResponse:
+async def health_check(response: Response) -> HealthResponse:
+    """Report liveness and database connectivity.
+
+    Returns 503 when the database cannot be reached so hosting-platform health
+    checks and uptime monitors see the real state instead of a false positive.
+    """
     settings = get_settings()
     try:
         with engine.connect() as connection:
@@ -41,10 +47,12 @@ async def health_check() -> HealthResponse:
     except Exception:
         database = "unavailable"
         status_value = "degraded"
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
 
     return HealthResponse(
         status=status_value,
         database=database,
+        ai_analysis="configured" if is_gemini_configured() else "not_configured",
         service=settings.app_name,
         environment=settings.environment,
     )

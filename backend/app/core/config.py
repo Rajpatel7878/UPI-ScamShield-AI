@@ -20,6 +20,11 @@ class Settings(BaseSettings):
     app_version: str = "1.0.0"
     environment: str = "development"
     debug: bool = True
+    # Interactive /docs, /redoc and the OpenAPI schema. Set false to hide them.
+    enable_docs: bool = True
+    # "text" for local development, "json" for structured hosting logs.
+    log_format: str = "text"
+    log_level: str = "INFO"
     api_prefix: str = "/api/v1"
     frontend_url: str = "http://localhost:5173"
 

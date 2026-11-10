@@ -37,30 +37,35 @@ class RequestGuardMiddleware(BaseHTTPMiddleware):
         call_next: RequestResponseEndpoint,
     ) -> Response:
         settings = get_settings()
+        started = time.perf_counter()
 
         # 1. Reject oversized declared bodies before parsing them.
         content_length = request.headers.get("content-length")
         if content_length:
             try:
                 if int(content_length) > settings.max_request_bytes:
-                    return self._error(
-                        request,
-                        413,
-                        "Request body is too large.",
+                    return self._log_response(
+                        request, started, self._error(request, 413, "Request body is too large.")
                     )
             except ValueError:
-                return self._error(request, 400, "Invalid Content-Length header.")
+                return self._log_response(
+                    request, started, self._error(request, 400, "Invalid Content-Length header.")
+                )
 
         # 2. Rate limit mutation endpoints. Health checks and reads are excluded
         #    from the strict buckets but still bounded by the general API bucket.
         if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
             limit, window = self._limit_for(request.url.path)
             if limit and self._is_limited(self._client_key(request), request.url.path, limit, window):
-                return self._error(
+                return self._log_response(
                     request,
-                    429,
-                    "Too many requests. Please wait and try again.",
-                    headers={"Retry-After": str(window)},
+                    started,
+                    self._error(
+                        request,
+                        429,
+                        "Too many requests. Please wait and try again.",
+                        headers={"Retry-After": str(window)},
+                    ),
                 )
 
         response = await call_next(request)
@@ -81,6 +86,18 @@ class RequestGuardMiddleware(BaseHTTPMiddleware):
                 "max-age=31536000; includeSubDomains",
             )
 
+        return self._log_response(request, started, response)
+
+    def _log_response(self, request: Request, started: float, response: Response) -> Response:
+        """Emit one access log line. Request bodies and query strings are omitted."""
+        duration_ms = (time.perf_counter() - started) * 1000
+        logger.info(
+            "%s %s -> %s (%.1f ms)",
+            request.method,
+            request.url.path,
+            response.status_code,
+            duration_ms,
+        )
         return response
 
     def _limit_for(self, path: str) -> tuple[int, int]:

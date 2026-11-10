@@ -1,6 +1,7 @@
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.services.detection.gemini_service import is_gemini_configured
 
 client = TestClient(app)
 
@@ -25,6 +26,7 @@ def test_health_reports_database_connectivity() -> None:
     assert response.json() == {
         "status": "healthy",
         "database": "connected",
+        "ai_analysis": "configured" if is_gemini_configured() else "not_configured",
         "service": "UPI ScamShield AI",
         "environment": "development",
     }

@@ -61,10 +61,16 @@ export default function Detection() {
     setResult(null)
 
     try {
-      const { data } = await apiClient.post('/detect/analyze', {
-        content: text,
-        content_type: CONTENT_TYPE_MAP[contentType] || 'general',
-      })
+      // AI-assisted analysis is bounded server-side to ~35 s, so the client
+      // waits longer than the default request timeout instead of failing early.
+      const { data } = await apiClient.post(
+        '/detect/analyze',
+        {
+          content: text,
+          content_type: CONTENT_TYPE_MAP[contentType] || 'general',
+        },
+        { timeout: 45000 },
+      )
       setResult(toResult(data))
       requestAnimationFrame(() => {
         resultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })

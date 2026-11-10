@@ -9,34 +9,36 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api import api_router
 from app.core.config import get_settings
 from app.core.errors import register_exception_handlers
+from app.core.logging_config import configure_logging
 from app.core.middleware import RequestGuardMiddleware
+from app.database.connection import engine
 from app.database.init_db import init_db
 from app.schemas.health import RootResponse
 
-logging.basicConfig(
-    level=logging.INFO if get_settings().debug else logging.WARNING,
-    format="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
-    datefmt="%Y-%m-%dT%H:%M:%SZ",
-)
+configure_logging()
 
 logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    """Create missing tables and indexes once at startup.
+    """Prepare the database schema once at startup.
 
-    ``create_all`` is idempotent and never deletes existing records. Schema
-    migrations for production changes belong in Alembic.
+    Development creates missing tables idempotently. Production verifies the
+    Alembic-managed schema and refuses to start when migrations are missing.
+    No data is ever dropped or reset at startup.
     """
     init_db()
-    logger.info("Database schema ready")
     yield
+    engine.dispose()
+    logger.info("Database engine disposed")
 
 
 def create_application() -> FastAPI:
     """Build and configure the FastAPI application."""
     settings = get_settings()
+    openapi_url = settings.api_v1_prefix + "/openapi.json"
+    docs_enabled = settings.enable_docs
 
     application = FastAPI(
         title=settings.app_name,
@@ -47,9 +49,10 @@ def create_application() -> FastAPI:
             "optional Gemini assistance. Results are heuristic risk assessments, "
             "not proof that a message is fraudulent."
         ),
-        docs_url="/docs",
-        redoc_url="/redoc",
-        openapi_url=settings.api_v1_prefix + "/openapi.json",
+        # Public API documentation can be disabled with ENABLE_DOCS=false.
+        docs_url="/docs" if docs_enabled else None,
+        redoc_url="/redoc" if docs_enabled else None,
+        openapi_url=openapi_url if docs_enabled else None,
         lifespan=lifespan,
     )
 
@@ -79,6 +82,17 @@ def create_application() -> FastAPI:
         )
 
     application.include_router(api_router, prefix=settings.api_v1_prefix)
+
+    logger.info(
+        "%s %s starting | environment=%s | debug=%s | docs=%s | db=%s | cors=%s",
+        settings.app_name,
+        settings.app_version,
+        settings.environment,
+        settings.debug,
+        docs_enabled,
+        engine.url.get_backend_name(),
+        ",".join(settings.cors_origins),
+    )
 
     return application
 

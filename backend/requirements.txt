@@ -5,6 +5,10 @@ pydantic-settings==2.16.2
 python-dotenv==1.2.4
 SQLAlchemy==2.1.8
 
+# PostgreSQL driver for production + schema migrations
+psycopg[binary]==3.3.8
+alembic==1.20.1
+
 # Authentication (PyJWT replaces python-jose, which pulled a vulnerable ecdsa)
 PyJWT==2.15.1
 passlib[argon2]==1.7.4

@@ -1,14 +1,29 @@
-"""Database initialization.
+"""Database schema initialization.
 
-Creates all database tables defined in SQLAlchemy models.
-Idempotent: safe to call multiple times without deleting existing data.
-Uses SQLAlchemy's create_all which is safe for existing tables.
+Development: create any missing tables and indexes with SQLAlchemy's
+``create_all``, which is idempotent and never deletes records.
+
+Production: the schema is owned by Alembic migrations (``alembic upgrade head``).
+Startup only *verifies* that the expected tables exist and fails with an
+actionable message when they do not. ``create_all`` is deliberately skipped so a
+misconfigured deployment cannot silently create a partial schema, and no
+destructive operation (``drop_all``, resets) exists anywhere in the codebase.
 """
+
+import logging
 
 from sqlalchemy import inspect
 from sqlalchemy.engine import Engine
 
-from app.database.connection import engine, get_session, session_factory, Base
+from app.database.connection import engine
+from app.database.base import Base
+
+# Importing the models registers them on Base.metadata.
+import app.models  # noqa: F401  (imported for its side effect)
+
+logger = logging.getLogger(__name__)
+
+REQUIRED_TABLES = ("users", "scans")
 
 
 def table_exists(engine: Engine, table_name: str) -> bool:
@@ -17,38 +32,44 @@ def table_exists(engine: Engine, table_name: str) -> bool:
     return inspector.has_table(table_name)
 
 
+def missing_tables() -> list[str]:
+    """Return the required tables that are absent from the database."""
+    inspector = inspect(engine)
+    existing = set(inspector.get_table_names())
+    return [name for name in REQUIRED_TABLES if name not in existing]
+
+
 def init_db() -> None:
-    """Initialize the database by creating all tables.
+    """Prepare the database schema for the current environment.
 
-    This function is idempotent - it safely creates tables that don't
-    exist yet and does not delete or modify existing data.
-
-    Use in development startup. For production schema changes, use Alembic migrations.
+    Raises:
+        RuntimeError: in production when migrations have not been applied.
     """
-    # Create all tables that don't already exist.
+    from app.core.config import get_settings
+
+    if get_settings().is_production:
+        missing = missing_tables()
+        if missing:
+            raise RuntimeError(
+                "Database schema is not initialised; missing table(s): "
+                + ", ".join(missing)
+                + ". Run 'alembic upgrade head' from the backend directory "
+                "before starting the server."
+            )
+        logger.info("Production schema verified (%s)", ", ".join(REQUIRED_TABLES))
+        return
+
+    # Development / local: create missing tables and indexes. Idempotent and
+    # additive only - existing data is never dropped or rewritten.
     Base.metadata.create_all(bind=engine)
 
     # create_all does not add new indexes to tables that already exist. Create
-    # any missing indexes explicitly; checkfirst makes this idempotent and it
-    # never deletes data.
+    # any missing indexes explicitly; checkfirst makes this idempotent.
     for table in Base.metadata.tables.values():
         for index in table.indexes:
             index.create(bind=engine, checkfirst=True)
 
-
-def init_db_with_session() -> None:
-    """Initialize database and verify session functionality.
-
-    Creates tables and tests that a session can be opened and closed properly.
-    """
-    init_db()
-
-    # Test that we can create a session
-    with get_session() as session:
-        # Simple query to verify session works
-        from sqlalchemy import select
-        stmt = select(Base).limit(0)
-        session.execute(stmt)
+    logger.info("Schema ready (development create_all)")
 
 
 def get_engine() -> Engine:

@@ -1,7 +1,20 @@
 import axios from 'axios'
 
+// Local development talks to the FastAPI server on port 8000. Production
+// builds must never fall back to localhost: the deployed API URL comes from
+// VITE_API_BASE_URL, set in the Vercel project environment.
+const ENV_API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').trim()
+
+if (import.meta.env.PROD && !ENV_API_BASE_URL) {
+  console.error(
+    'VITE_API_BASE_URL is not set for this production build. Set it in the ' +
+      'hosting project environment and redeploy; API requests will fail until then.',
+  )
+}
+
 const CONFIGURED_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1'
+  ENV_API_BASE_URL ||
+  (import.meta.env.DEV ? 'http://localhost:8000/api/v1' : '')
 
 /**
  * Base URL for the FastAPI backend. The API is versioned under /api/v1; if the

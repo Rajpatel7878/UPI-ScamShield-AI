@@ -1,0 +1,65 @@
+# Render Blueprint for the UPI ScamShield AI backend.
+#
+# Deploy: Render Dashboard -> New -> Blueprint -> select this repository.
+# Values marked `sync: false` must be entered in the Render dashboard; secrets
+# are never committed. See docs/DEPLOYMENT_ARCHITECTURE.md for the full runbook.
+services:
+  - type: web
+    name: upi-scamshield-api
+    runtime: python
+    plan: free
+    region: singapore
+    rootDir: backend
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
+    # Migrations run before the app starts, so the schema is always current.
+    # No destructive database operation is performed at any point.
+    startCommand: alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips="*" --timeout-keep-alive 5
+    healthCheckPath: /api/v1/health
+    autoDeploy: true
+    envVars:
+      # The app runs on Python 3.11+. Render's default version is used; pin it
+      # here (e.g. 3.14.6) if you need the exact local version.
+      # - key: PYTHON_VERSION
+      #   value: 3.14.6
+      - key: ENVIRONMENT
+        value: production
+      - key: DEBUG
+        value: false
+      # Interactive API documentation (/docs) is intentionally enabled for the
+      # hackathon review. Set to false to hide it in a public deployment.
+      - key: ENABLE_DOCS
+        value: true
+      - key: LOG_FORMAT
+        value: json
+      - key: LOG_LEVEL
+        value: INFO
+      # Render terminates TLS in front of the service, so client IPs arrive in
+      # X-Forwarded-For and rate limiting must key on the real address.
+      - key: TRUST_PROXY_HEADERS
+        value: true
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash
+      - key: GEMINI_TIMEOUT_SECONDS
+        value: 30
+      - key: GEMINI_MAX_RETRIES
+        value: 2
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: upi-scamshield-db
+          property: connectionString
+      # Set to the deployed Vercel URL, for example
+      # https://upi-scamshield-ai.vercel.app (no trailing slash).
+      - key: FRONTEND_URL
+        sync: false
+      # Optional. Leave empty to run rule + URL analysis only.
+      - key: GEMINI_API_KEY
+        sync: false
+
+databases:
+  - name: upi-scamshield-db
+    plan: free
+    databaseName: scamshield
+    user: scamshield
+    region: singapore

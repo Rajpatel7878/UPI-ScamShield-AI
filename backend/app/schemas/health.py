@@ -14,12 +14,14 @@ class RootResponse(BaseModel):
 class HealthResponse(BaseModel):
     """Service health payload.
 
-    ``database`` reports ``not_configured`` until persistence is added in a
-    later phase; it must never claim a connection that does not exist.
+    ``database`` reports an actual connectivity check and never claims a
+    connection that does not exist. ``ai_analysis`` only reports whether a
+    Gemini key is configured; it never exposes the key or makes a paid call.
     """
 
     status: str = Field(examples=["healthy"])
-    database: str = Field(examples=["not_configured"])
+    database: str = Field(examples=["connected"])
+    ai_analysis: str = Field(examples=["configured"])
     service: str = Field(examples=["UPI ScamShield AI"])
     environment: str = Field(examples=["development"])
 
