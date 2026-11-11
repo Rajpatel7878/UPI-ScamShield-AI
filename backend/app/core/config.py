@@ -57,6 +57,11 @@ class Settings(BaseSettings):
     rate_limit_api_per_minute: int = 300
     trust_proxy_headers: bool = False
     max_request_bytes: int = 1_048_576
+    openrouter_api_key: str = Field(default="", validation_alias="OPENROUTER_API_KEY")
+    openrouter_base_url: str = Field(default="https://openrouter.ai/api/v1", validation_alias="OPENROUTER_BASE_URL")
+    openrouter_model: str = Field(default="google/gemini-3.5-flash", validation_alias="OPENROUTER_MODEL")
+    openrouter_timeout_seconds: float = Field(default=30, validation_alias="OPENROUTER_TIMEOUT_SECONDS")
+    openrouter_max_retries: int = Field(default=2, validation_alias="OPENROUTER_MAX_RETRIES")
 
     @property
     def is_production(self) -> bool:

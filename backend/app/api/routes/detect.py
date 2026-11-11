@@ -24,12 +24,17 @@ from app.schemas.history import (
 )
 from app.schemas.detection import DetectionRequest, DetectionResponse
 from app.services.detection.gemini_service import GeminiService, is_gemini_configured
+from app.services.detection.openrouter_service import is_openrouter_configured as _is_openrouter_configured
 from app.services.detection.hybrid_scorer import HybridScorer
 from app.services.detection.risk_scorer import RiskScorer
 from app.services.detection.rule_detector import RuleDetector
 from app.services.detection.url_detector import URLDetector
 
 logger = logging.getLogger(__name__)
+
+# Provider check wrappers for test monkeypatching
+def is_openrouter_configured() -> bool:
+    return _is_openrouter_configured()
 
 router = APIRouter(tags=["detection"])
 
@@ -140,6 +145,46 @@ async def _analyze_with_gemini(content: str, content_type: str) -> Optional[dict
     except Exception as exc:  # noqa: BLE001 - AI failure must never break rules
         logger.warning("Gemini analysis failed: %s", type(exc).__name__)
         return None
+
+
+async def _analyze_with_openrouter(content: str, content_type: str) -> Optional[dict[str, Any]]:
+    """Run OpenRouter analysis off the event loop, with a hard wall-clock bound."""
+    from app.services.detection.openrouter_service import OpenRouterService, is_openrouter_configured
+
+    if not is_openrouter_configured():
+        return None
+
+    service = OpenRouterService()
+    if not service.is_available():
+        return None
+
+    try:
+        return await asyncio.wait_for(
+            asyncio.to_thread(service.analyze, content, content_type),
+            timeout=35.0,
+        )
+    except asyncio.TimeoutError:
+        logger.warning("OpenRouter analysis timed out")
+        return None
+    except Exception as exc:  # noqa: BLE001 - AI failure must never break rules
+        logger.warning("OpenRouter analysis failed: %s", type(exc).__name__)
+        return None
+
+
+async def _analyze_with_ai(content: str, content_type: str) -> Optional[dict[str, Any]]:
+    """Run AI analysis, trying OpenRouter then Gemini, falling back to rule-based."""
+    # Try OpenRouter first if configured
+    if is_openrouter_configured():
+        openrouter_result = await _analyze_with_openrouter(content, content_type)
+        if openrouter_result and openrouter_result.get("status") == "completed":
+            return openrouter_result
+    # Fall back to Gemini if configured
+    if is_gemini_configured():
+        gemini_result = await _analyze_with_gemini(content, content_type)
+        if gemini_result and gemini_result.get("status") == "completed":
+            return gemini_result
+    # No AI provider configured
+    return None
 
 
 def _run_url_analysis(content: str, content_type: str) -> dict[str, Any]:
