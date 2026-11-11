@@ -73,7 +73,7 @@ function Settings() {
             <li>Submitted message text is analyzed and is not written to the database.</li>
             <li>Only the risk score, category, indicators, and recommendations are saved.</li>
             <li>URL query values are redacted before results are returned or stored.</li>
-            <li>When Gemini is enabled, message text is sent to Google for analysis; without a key, analysis stays local.</li>
+            <li>When an AI provider (OpenRouter or Google Gemini) is enabled, message text is sent for analysis with OTP, PIN, password, and card values masked; without a key, analysis stays local.</li>
             <li>Heuristic results are indicators, not proof that a message is fraudulent.</li>
           </ul>
         </BaseCard>

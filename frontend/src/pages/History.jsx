@@ -115,7 +115,7 @@ function ScanDetailModal({ scan, onClose }) {
             <p className="text-sm font-medium mb-2">Analysis source statuses</p>
             <div className="flex flex-wrap gap-2 text-sm">
               <StatusBadge status={scan.rule_based_status === 'completed' ? 'success' : 'warning'}>Rule-based: {scan.rule_based_status || 'unknown'}</StatusBadge>
-              <StatusBadge status={scan.gemini_status === 'completed' ? 'success' : 'neutral'}>Gemini: {scan.gemini_status || 'unavailable'}</StatusBadge>
+              <StatusBadge status={scan.gemini_status === 'completed' ? 'success' : 'neutral'}>AI: {scan.gemini_status || 'unavailable'}</StatusBadge>
               <StatusBadge status={scan.url_status === 'completed' ? 'success' : 'neutral'}>URL: {scan.url_status || 'not_applicable'}</StatusBadge>
             </div>
           </div>
@@ -131,7 +131,7 @@ function ScanDetailModal({ scan, onClose }) {
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-medium">{ind?.name || ind?.rule_id || 'Indicator'}</span>
                       {ind?.severity ? <StatusBadge status={riskTone(ind.severity)}>{String(ind.severity)}</StatusBadge> : null}
-                      {ind?.source ? <span className="text-xs text-slate-400">Source: {ind.source === 'gemini' ? 'Gemini (heuristic/contextual)' : ind.source === 'rule_based' ? 'Rule-based' : String(ind.source)}</span> : null}
+                      {ind?.source ? <span className="text-xs text-slate-400">Source: {ind.source === 'gemini' || ind.source === 'openrouter' ? 'AI (heuristic/contextual)' : ind.source === 'rule_based' ? 'Rule-based' : String(ind.source)}</span> : null}
                     </div>
                     <p className="text-sm text-slate-300 mt-1">{ind?.description || ind?.explanation || 'No explanation provided.'}</p>
                   </li>

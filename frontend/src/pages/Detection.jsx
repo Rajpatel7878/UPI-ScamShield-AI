@@ -34,6 +34,8 @@ function toResult(data) {
     safetyWarning: SAFETY_WARNING,
     analysisType: data.analysis_type,
     aiStatus: data.ai_analysis?.status,
+    aiProvider: data.ai_analysis?.provider,
+    aiModel: data.ai_analysis?.model,
   }
 }
 
@@ -90,8 +92,10 @@ export default function Detection() {
           <Info className="mt-0.5 size-4 shrink-0 text-brand-300" aria-hidden="true" />
           <span>
             Rule-based analysis runs on this server. URL analysis is passive and
-            never opens links. If a Gemini API key is configured, the message text
-            is also sent to Google Gemini; otherwise only local analysis is used.
+            never opens links. If an AI provider is configured (OpenRouter or
+            Google Gemini), the message text is also sent for analysis after OTP,
+            PIN, password, and card values are masked; otherwise only local
+            analysis is used.
           </span>
         </p>
       </div>

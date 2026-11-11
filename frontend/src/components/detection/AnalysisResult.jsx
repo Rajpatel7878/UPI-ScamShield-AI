@@ -51,6 +51,21 @@ function indicatorText(indicator) {
   return indicator || {}
 }
 
+const AI_PROVIDER_LABELS = {
+  gemini: 'Gemini',
+  openrouter: 'OpenRouter',
+}
+
+function providerLabel(provider) {
+  return AI_PROVIDER_LABELS[String(provider || '').toLowerCase()] || 'AI'
+}
+
+function indicatorSourceLabel(source, provider) {
+  if (source === 'url_based') return 'URL analysis'
+  if (source === 'gemini' || source === 'openrouter') return providerLabel(provider)
+  return 'Rules'
+}
+
 export function AnalysisResult({ result, hasResult, onDismiss }) {
   if (!hasResult || !result) {
     return (
@@ -72,6 +87,8 @@ export function AnalysisResult({ result, hasResult, onDismiss }) {
     safetyWarning,
     analysisType,
     aiStatus,
+    aiProvider,
+    aiModel,
   } = result
 
   return (
@@ -99,7 +116,7 @@ export function AnalysisResult({ result, hasResult, onDismiss }) {
           <p className="type-caption mt-2 flex items-center gap-1.5">
             <Sparkles className="size-3.5 text-brand-300" aria-hidden="true" />
             {aiStatus === 'completed'
-              ? 'Gemini analysis included'
+              ? `${providerLabel(aiProvider)} analysis included${aiModel ? ` (${aiModel})` : ''}`
               : 'Not used — rule and URL analysis only'}
           </p>
         </div>
@@ -124,7 +141,7 @@ export function AnalysisResult({ result, hasResult, onDismiss }) {
                     {item.severity && <SeverityBadge severity={item.severity} />}
                     {item.source && (
                       <span className="type-caption">
-                        {item.source === 'url_based' ? 'URL analysis' : item.source === 'gemini' ? 'Gemini' : 'Rules'}
+                        {indicatorSourceLabel(item.source, aiProvider)}
                       </span>
                     )}
                   </div>

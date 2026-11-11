@@ -175,7 +175,8 @@ export default function AuthPage({ mode = 'login' }) {
 
       <p className="type-caption mt-4 text-center">
         Submitted messages are analyzed for risk and are not stored. When AI
-        assistance is enabled, message text is sent to Google Gemini for analysis.
+        assistance is enabled, message text is sent to a configured AI provider
+        (OpenRouter or Google Gemini) after OTP, PIN, and password values are masked.
       </p>
     </div>
   )
