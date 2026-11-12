@@ -1,474 +1,422 @@
-# UPI ScamShield AI
+# 🛡️ UPI ScamShield AI
+### Detect. Analyze. Protect.
 
-**Detect. Analyze. Protect.**
+**An AI-powered UPI fraud detection platform that helps people identify suspicious payment messages, phishing attempts, fake cashback offers, and social-engineering scams before they become victims.**
 
-A full-stack, explainable risk-analysis assistant for suspicious UPI and banking
-messages. Submit an SMS, WhatsApp message, payment request or link and get a
-risk score, the indicators that drove it, and practical safety guidance.
+<p align="center">
 
-[![Backend tests](https://img.shields.io/badge/backend%20tests-104%20passing-brightgreen)](#13-testing)
-[![Frontend build](https://img.shields.io/badge/frontend%20build-passing-brightgreen)](#13-testing)
-[![npm audit](https://img.shields.io/badge/npm%20audit-0%20vulnerabilities-brightgreen)](#13-testing)
-[![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+  ![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)
+  ![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white)
+  ![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)
+  ![Gemini](https://img.shields.io/badge/Google_Gemini-8E75B2?style=for-the-badge&logo=googlegemini&logoColor=white)
+  ![OpenRouter](https://img.shields.io/badge/OpenRouter-000000?style=for-the-badge)
+  ![SQLite](https://img.shields.io/badge/SQLite-003B57?style=for-the-badge&logo=sqlite&logoColor=white)
 
-> **Honest status:** the application is complete and verified locally. It is
-> **prepared for deployment but not deployed yet**, so no live URL is published
-> here. Detection results are heuristic risk assessments — not proof that a
-> message is fraudulent — and the project has no formal security certification.
+</p>
 
 ---
 
-## 1. Project overview
+## 🚨 The Problem
 
-UPI ScamShield AI is an individual full-stack project that helps users reason
-about payment-fraud messages before they act. It combines a transparent
-rule-based engine, passive URL inspection and optional Google Gemini analysis
-into one risk score with an explanation.
+UPI has made digital payments incredibly convenient, but it has also created opportunities for fraudsters to exploit people's trust.
 
-The system is built as a React single-page application backed by a FastAPI API,
-with JWT authentication, per-user scan history and analytics, and a Scam
-Awareness Center with guides, safety rules, emergency guidance, a quiz and
-official reporting links.
+Scammers use increasingly convincing techniques:
 
-## 2. Problem statement
+- Fake KYC verification messages.
+- OTP and UPI PIN harvesting.
+- Fake cashback and reward offers.
+- Fraudulent payment requests.
+- Phishing links disguised as legitimate services.
+- Impersonation of banks, customer support, and government services.
 
-UPI fraud is cheap to run and hard to spot. Attackers impersonate banks, send
-fake KYC or account-blocking warnings, request "verification" OTPs and UPI PINs,
-push collect requests, and share shortened links that lead to credential-harvesting
-pages. The warning signs are scattered: urgency, grammar, a mismatched domain, an
-unusual payment request. Under pressure, users — especially first-time digital
-payment users — have seconds to decide.
+Many users cannot easily distinguish a genuine payment notification from a sophisticated scam.
 
-Most people have no simple way to ask: *why does this message look wrong?*
+**The challenge isn't just detecting suspicious messages. It's helping people understand WHY something is suspicious before they take action.**
 
-## 3. Solution
+## 💡 Our Solution
 
-Submit the message or link. ScamShield AI:
+**UPI ScamShield AI** is an intelligent fraud-awareness and detection platform that combines rule-based security analysis with AI-powered contextual understanding.
 
-1. normalizes the text and evaluates weighted fraud rules;
-2. passively parses every link (no link is ever opened);
-3. optionally asks Gemini for a second opinion when the operator configures a
-   key — and falls back cleanly when it is unavailable;
-4. returns a 0–100 risk score, a risk level, the indicator list with severity and
-   source, and concrete recommendations;
-5. stores only the analysis metadata, never the submitted message text.
+Users can submit suspicious messages or URLs and receive an explainable risk assessment containing:
 
-## 4. Key features
+- A risk score from 0–100.
+- Risk classification: Low, Medium, High, or Critical.
+- Detected scam category.
+- Suspicious indicators and explanations.
+- Recommended safety actions.
 
-- **Explainable rule engine** — every indicator carries a name, category,
-  severity, description and `rule_based` / `url_based` / `gemini` source.
-- **Hybrid scoring** — rules and URL findings form the base score; validated AI
-  output is merged with documented weights and never overrides missing evidence.
-- **Passive URL analysis** — IP hosts, suspicious TLDs, shorteners, deep
-  subdomains, credential user-info, punycode, risky keywords and ports. No DNS
-  lookups, HTTP requests or page fetches.
-- **Optional Gemini analysis** — backend-only key, JSON-delimited untrusted
-  input, strict schema validation, bounded retries and timeouts.
-- **Authentication** — Argon2id password hashing and signed JWTs with full claim
-  verification.
-- **Per-user history** — filtering, sorting, pagination, scan detail, delete-all,
-  and owner-only isolation enforced in the database query.
-- **Dashboard and analytics** — user-scoped counts, charts and empty states.
-- **Scam Awareness Center** — scam guides, warning signs, emergency response,
-  official reporting links, FAQ, safety checklist and a knowledge quiz.
-- **Production-minded UI** — responsive layout, keyboard navigation, focus
-  management, labelled charts, reduced-motion support.
-- **Privacy by design** — message text is not persisted; URL query values are
-  redacted in responses.
+Instead of simply saying whether something is suspicious, ScamShield helps users understand the warning signs.
 
-## 5. How the system works
+## ✨ Key Features
 
-```text
-Submitted message / URL
-        │
-        ▼
-Text normalization  ──►  Rule engine (weighted, explainable)
-        │                        │
-        ├──►  Passive URL analysis (no fetching)
-        │                        │
-        └──►  Gemini analysis (optional, validated) 
-                                 │
-                                 ▼
-                    Hybrid risk scoring (0–100 + level)
-                                 │
-                                 ▼
-        Score · level · category · indicators · recommendations
-                                 │
-                                 ▼
-              Metadata-only scan record for the signed-in user
+### 🧠 Hybrid AI Fraud Detection
+Combines rule-based detection with AI analysis to identify suspicious patterns and contextual scam techniques.
+
+### 🤖 Multi-Provider AI Architecture
+Integrates two AI providers:
+- **Google Gemini** – contextual scam analysis.
+- **OpenRouter** – access to configurable AI models.
+
+Includes provider fallback and a rule-based detection path when AI services are unavailable.
+
+### 📊 Explainable Risk Scoring
+Every analysis produces a risk score and corresponding category.
+
+| Risk Score | Classification |
+|---|---|
+| 0–29 | 🟢 Low |
+| 30–59 | 🟡 Medium |
+| 60–79 | 🟠 High |
+| 80–100 | 🔴 Critical |
+
+*These are heuristic risk bands, not statistically calibrated probabilities.*
+
+### 🔗 Suspicious URL Analysis
+Examines URL characteristics and suspicious patterns without automatically opening or visiting submitted URLs.
+
+### 📈 Security Dashboard
+Provides an overview of detection activity, risk distribution, and security statistics.
+
+### 🗂️ Detection History
+Allows authenticated users to review their previous analyses and track suspicious activity.
+
+### 📚 Scam Awareness Center
+Provides educational resources, scam explanations, prevention tips, and guidance for responding to suspected fraud.
+
+### 🔐 Privacy-First Design
+- Backend-only AI credentials.
+- Sensitive credential masking before AI requests.
+- User-specific scan history.
+- No automatic visits to suspicious URLs.
+- Environment-based secret management.
+
+## ⚙️ How It Works
+
+```mermaid
+flowchart TD
+    A["User submits message or URL"] --> B["Input Validation"]
+    B --> C["Sensitive Credential Masking"]
+    C --> D["Rule-Based Detection"]
+    C --> E["AI Analysis"]
+    E --> F["OpenRouter"]
+    F -->|Failure or timeout| G["Google Gemini"]
+    G -->|Unavailable| H["Rule-Based Fallback"]
+    D --> I["Hybrid Risk Scoring"]
+    E --> I
+    H --> I
+    I --> J["Risk Classification"]
+    J --> K["Explanation and Recommendations"]
+    K --> L["Results Dashboard"]
 ```
 
-| Score band | Level | Meaning |
-| --- | --- | --- |
-| 0–29 | Low | No strong indicators found — still verify independently |
-| 30–59 | Medium | Suspicious patterns; confirm through official channels |
-| 60–79 | High | Multiple fraud indicators; do not act on the message |
-| 80–100 | Critical | Strong fraud pattern; do not share credentials or pay |
+### Hybrid Risk Scoring
 
-## 6. Technology stack
+The existing implementation combines rule-based and AI risk scores:
 
-| Area | Technology |
-| --- | --- |
-| Frontend | React 19, React Router 7, Vite 8, Tailwind CSS 4 |
-| UI | Lucide icons, Recharts |
-| HTTP | Axios |
-| Backend | Python 3.11+ (developed on 3.14), FastAPI 0.162, Uvicorn |
-| Validation | Pydantic 2 / pydantic-settings |
-| Database | SQLAlchemy 2.1 — SQLite locally, PostgreSQL (psycopg 3) in production |
+```python
+final_score = (rule_score * 0.60) + (ai_score * 0.40)
+```
+
+This allows the system to combine recognizable fraud indicators with contextual AI analysis.
+
+The scoring pipeline also preserves structured analysis results and provider information.
+
+## 🏗️ System Architecture
+
+```mermaid
+flowchart TB
+    U["User"] --> FE["React Frontend"]
+    FE --> API["FastAPI Backend"]
+    API --> AUTH["Authentication"]
+    API --> DET["Detection Engine"]
+    DET --> RULE["Rule-Based Detector"]
+    DET --> AI["AI Provider Manager"]
+    AI --> OR["OpenRouter"]
+    AI --> GM["Google Gemini"]
+    RULE --> SCORE["Hybrid Risk Scorer"]
+    OR --> SCORE
+    GM --> SCORE
+    SCORE --> DB["SQLAlchemy / Database"]
+    SCORE --> RESP["Structured Detection Response"]
+    RESP --> FE
+```
+
+### Technology Stack
+
+| Layer | Technologies |
+|---|---|
+| Frontend | React, Vite, Tailwind CSS |
+| Routing | React Router DOM |
+| UI | Lucide React, Recharts |
+| API Communication | Axios |
+| Backend | Python, FastAPI |
+| Validation | Pydantic |
+| Database | SQLAlchemy, SQLite |
 | Migrations | Alembic |
-| Authentication | PyJWT (HS256), Argon2 via passlib |
-| AI (optional) | Google Gemini via `google-genai` |
-| Tests | pytest, httpx TestClient |
+| AI Providers | Google Gemini, OpenRouter |
+| AI SDK | Google GenAI, HTTPX |
+| Authentication | JWT, Argon2 |
+| Testing | Pytest |
+| Security Checks | Bandit, pip-audit |
+| Version Control | Git, GitHub |
 
-## 7. Architecture
-
-```text
-Browser (React SPA, Vite)
-   │  HTTPS JSON + Bearer JWT
-   ▼
-FastAPI  /api/v1
-   ├── request guards: size limit · rate limit · security headers
-   ├── auth: JWT · Argon2
-   ├── routes: auth · detect/history · dashboard/analytics · health
-   ├── detection: rules → URL → Gemini → hybrid scoring
-   ├── SQLAlchemy ──► SQLite (local) / PostgreSQL (production)
-   └── Google Gemini API (optional, backend-only key)
-```
-
-Deployment target:
-
-```text
-Browser → Vercel (React SPA) → HTTPS API → Render (FastAPI) → PostgreSQL
-                                                   └──► Google Gemini API
-```
-
-Full details: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) ·
-[`docs/DEPLOYMENT_ARCHITECTURE.md`](docs/DEPLOYMENT_ARCHITECTURE.md) ·
-[`submission/TECHNICAL_ARCHITECTURE.md`](submission/TECHNICAL_ARCHITECTURE.md).
-
-## 8. Project structure
+## 📁 Project Structure
 
 ```text
 UPI-ScamShield-AI/
+│
 ├── backend/
 │   ├── app/
-│   │   ├── api/              # system, auth, detection/history, dashboard/analytics
-│   │   ├── core/             # settings, logging, security, dependencies, errors, middleware
-│   │   ├── database/         # engine, sessions, URL normalization, schema verification
-│   │   ├── models/           # User, Scan
-│   │   ├── schemas/          # request/response contracts
-│   │   └── services/         # auth service + detection pipeline
-│   ├── alembic/              # migration environment and versions
-│   ├── tests/                # 104 backend tests
-│   ├── requirements.txt
-│   └── .env.example
+│   │   ├── api/
+│   │   │   └── routes/
+│   │   ├── core/
+│   │   ├── database/
+│   │   ├── models/
+│   │   ├── schemas/
+│   │   └── services/
+│   │       └── detection/
+│   │           ├── openrouter_service.py
+│   │           ├── gemini_service.py
+│   │           └── ...
+│   ├── tests/
+│   ├── .env.example
+│   └── requirements.txt
+│
 ├── frontend/
+│   ├── public/
 │   ├── src/
-│   │   ├── components/       # UI, layout, landing, detection, dashboard, awareness
-│   │   ├── context/          # authentication state
-│   │   ├── data/awareness/   # static educational content
-│   │   ├── pages/            # landing, auth, dashboard, detection, history, analytics, awareness
-│   │   ├── routes/
-│   │   └── services/         # axios client, health service
-│   ├── vercel.json
-│   └── .env.example
-├── docs/                     # architecture, deployment runbook, QA and final reports
-├── submission/               # hackathon submission package
-├── render.yaml               # Render Blueprint (backend + PostgreSQL)
+│   │   ├── components/
+│   │   ├── context/
+│   │   ├── pages/
+│   │   ├── services/
+│   │   └── ...
+│   └── package.json
+│
+├── docs/
+│   ├── PRE_DEPLOYMENT_AUDIT.md
+│   └── FINAL_PRE_DEPLOYMENT_AUDIT_REPORT.md
+│
 ├── .gitignore
-├── LICENSE
 └── README.md
 ```
 
-## 9. Screenshots
+*The structure above summarizes the main project areas; actual filenames may vary.*
 
-Screenshots are captured from the running application only — no mock-ups or
-generated images are committed. The capture checklist (view, viewport, expected
-state) is in [`docs/SCREENSHOTS_AND_DEMO.md`](docs/SCREENSHOTS_AND_DEMO.md).
+## 🚀 Getting Started
 
-| # | View | File to add |
-| --- | --- | --- |
-| 1 | Landing page | `docs/screenshots/01-landing.png` |
-| 2 | Dashboard | `docs/screenshots/02-dashboard.png` |
-| 3 | Detection interface | `docs/screenshots/03-detection.png` |
-| 4 | High-risk detection result | `docs/screenshots/04-high-risk-result.png` |
-| 5 | URL analysis result | `docs/screenshots/05-url-result.png` |
-| 6 | Scan history | `docs/screenshots/06-history.png` |
-| 7 | Analytics | `docs/screenshots/07-analytics.png` |
-| 8 | Scam Awareness Center | `docs/screenshots/08-awareness.png` |
-| 9 | Mobile layout | `docs/screenshots/09-mobile.png` |
+### Prerequisites
 
-> These files do not exist yet; capture them from the verified deployment (or a
-> local run) before publishing, then uncomment the embed lines below.
+Install the following:
 
-<!--
-![Landing page](docs/screenshots/01-landing.png)
-![Detection result](docs/screenshots/04-high-risk-result.png)
--->
+- Python 3.11 or compatible project-supported version.
+- Node.js and npm.
+- Git.
+- Google Gemini API key.
+- OpenRouter API key.
 
-## 10. Installation
-
-Prerequisites: Node.js 20+, Python 3.11+ (developed on 3.14), Git.
+### 1. Clone the Repository
 
 ```bash
 git clone https://github.com/Rajpatel7878/UPI-ScamShield-AI.git
 cd UPI-ScamShield-AI
 ```
 
-## 11. Local setup
+### 2. Backend Setup
+
+```bash
+cd backend
+python -m venv .venv
+source .venv/Scripts/activate
+pip install -r requirements.txt
+```
+
+Create your local environment file:
+
+```bash
+cp .env.example .env
+```
+
+Configure the required variables in `backend/.env`:
+
+```env
+GEMINI_API_KEY=your_gemini_api_key
+OPENROUTER_API_KEY=your_openrouter_api_key
+
+AI_PROVIDER=auto
+```
+
+Keep all API keys private. Never commit `.env` to GitHub.
+
+Start the backend:
+
+```bash
+uvicorn app.main:app --reload
+```
+
+Backend URL:
+
+```text
+http://localhost:8000
+```
+
+### 3. Frontend Setup
+
+Open another terminal:
+
+```bash
+cd frontend
+npm install
+```
+
+Configure the frontend API URL using the environment-variable name supported by the existing frontend configuration.
+
+For example:
+
+```env
+VITE_API_BASE_URL=http://localhost:8000
+```
+
+Start the frontend:
+
+```bash
+npm run dev
+```
+
+Frontend URL:
+
+```text
+http://localhost:5173
+```
+
+## 🧪 Testing
 
 ### Backend
 
 ```bash
 cd backend
-python -m venv .venv
-source .venv/Scripts/activate        # Windows Git Bash
-# source .venv/bin/activate          # macOS / Linux
-pip install -r requirements.txt      # add -r requirements-dev.txt for pytest
-cp .env.example .env                 # then edit if needed
-alembic upgrade head                 # create the schema through migrations
-uvicorn app.main:app --reload --port 8000
-```
+source .venv/Scripts/activate
 
-Health check: <http://localhost:8000/api/v1/health>
-API docs: <http://localhost:8000/docs>
+python -m compileall app
+python -m pytest -q -p no:asyncio
+python -m pip check
+```
 
 ### Frontend
 
 ```bash
 cd frontend
-npm install
-cp .env.example .env
-npm run dev
+
+npm run lint
+npm run build
+npm audit
 ```
 
-Open <http://localhost:5173>. The dev server uses `strictPort`, so port 5173 must
-be free.
+### Security Testing
 
-## 12. Environment variables
+The project includes security checks for:
 
-Only `.env.example` templates are tracked. Real `.env` files, databases, virtual
-environments and build output are gitignored.
+- Sensitive credential masking.
+- Prompt-injection resistance.
+- User-data isolation.
+- API key exposure.
+- Passive URL analysis.
+- Provider failure handling.
+- Structured AI responses.
 
-### Backend
+Run checks using the tools configured in the project.
 
-| Variable | Default | Notes |
-| --- | --- | --- |
-| `APP_NAME` | `UPI ScamShield AI` | Service name in API metadata |
-| `APP_VERSION` | `1.0.0` | Reported API version |
-| `ENVIRONMENT` | `development` | `production` enables HSTS and fail-fast checks |
-| `DEBUG` | `true` | Set `false` in production |
-| `ENABLE_DOCS` | `true` | Serves `/docs`, `/redoc` and the OpenAPI schema |
-| `LOG_FORMAT` | `text` | `json` for structured hosting logs |
-| `LOG_LEVEL` | `INFO` | |
-| `DATABASE_URL` | `sqlite:///./scamshield.db` | `postgres://` / `postgresql://` are normalized to psycopg 3 |
-| `API_PREFIX` | `/api/v1` | API route prefix |
-| `FRONTEND_URL` | `http://localhost:5173` | Primary CORS origin (exact match, no trailing slash) |
-| `CORS_ORIGINS` | empty | Optional comma-separated extra origins; wildcards discarded |
-| `JWT_SECRET_KEY` | empty | **Required in production**, 32+ characters. Empty in development uses an ephemeral secret that invalidates sessions on restart |
-| `JWT_ALGORITHM` | `HS256` | HS256/384/512 only |
-| `ACCESS_TOKEN_EXPIRE_MINUTES` | `30` | 5–1440 |
-| `RATE_LIMIT_LOGIN_PER_MINUTE` | `10` | Per client IP and path |
-| `RATE_LIMIT_REGISTER_PER_5_MINUTES` | `5` | |
-| `RATE_LIMIT_ANALYZE_PER_MINUTE` | `30` | |
-| `RATE_LIMIT_API_PER_MINUTE` | `300` | |
-| `TRUST_PROXY_HEADERS` | `false` | Enable only behind a trusted reverse proxy |
-| `MAX_REQUEST_BYTES` | `1048576` | Declared body limit |
-| `GEMINI_API_KEY` | empty | Optional, backend-only |
-| `GEMINI_MODEL` | `gemini-2.5-flash` | |
-| `GEMINI_TIMEOUT_SECONDS` | `30` | Provider request timeout |
-| `GEMINI_MAX_RETRIES` | `2` | Bounded retries |
+## 🔒 Security & Privacy
 
-```bash
-python -c "import secrets; print(secrets.token_urlsafe(48))"
-```
+Security is a core design consideration.
 
-### Frontend
+UPI ScamShield AI follows these principles:
 
-| Variable | Default | Notes |
-| --- | --- | --- |
-| `VITE_API_BASE_URL` | `http://localhost:8000/api/v1` | Must include `/api/v1`. Required for production builds |
+1. **Secret protection:** AI API keys stay on the backend.
+2. **Credential masking:** Sensitive values such as OTPs and UPI PINs are masked before AI requests.
+3. **Passive URL analysis:** Submitted URLs are analyzed without automatically visiting them.
+4. **User isolation:** Authenticated users can access only their own scan records.
+5. **AI input safety:** Submitted messages are treated as untrusted input.
+6. **Provider resilience:** AI failures are handled through fallback logic.
 
-Only `VITE_`-prefixed variables reach the browser. Never put backend secrets in a
-frontend environment file.
+**Important:** ScamShield provides risk assessments and awareness guidance. It cannot guarantee that a transaction or message is safe.
 
-## 13. API documentation
+If you suspect financial fraud in India, contact your bank immediately and report cyber financial fraud through the official helpline **1930** or [National Cyber Crime Reporting Portal](https://cybercrime.gov.in/).
 
-Base URL: `/api/v1`. Interactive docs: `/docs` and `/redoc` (when
-`ENABLE_DOCS=true`). No public API URL is published until a deployment is
-verified.
+Never share your UPI PIN or OTP with anyone.
 
-| Method | Path | Auth | Purpose |
-| --- | --- | --- | --- |
-| `GET` | `/` | No | API metadata |
-| `GET` | `/health` | No | Liveness + database connectivity + AI configuration state (`503` if the database is unreachable) |
-| `GET` | `/system/info` | No | Safe module metadata |
-| `POST` | `/auth/register` | No | Create an account |
-| `POST` | `/auth/login` | No | Obtain a bearer token |
-| `GET` | `/auth/me` | Yes | Current user profile |
-| `POST` | `/auth/logout` | Yes | Client-side logout acknowledgement |
-| `POST` | `/detect/analyze` | Yes | Analyze content and persist the result metadata |
-| `GET` | `/detect/history` | Yes | Paginated, filtered, sorted history |
-| `GET` | `/detect/history/{scan_id}` | Yes | Owner-only scan detail |
-| `DELETE` | `/detect/history` | Yes | Delete all scans for the current user |
-| `GET` | `/dashboard/stats` | Yes | Dashboard statistics |
-| `GET` | `/analytics/overview` | Yes | Extended analytics |
+## 📸 Screenshots & Demo
 
-```bash
-# Register and get a token (fictional data)
-curl -X POST http://localhost:8000/api/v1/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{"full_name":"Test User","email":"test@example.com","password":"Test-Passw0rd!"}'
+Add real screenshots of your running application here.
 
-curl -X POST http://localhost:8000/api/v1/detect/analyze \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer <token>" \
-  -d '{"content":"Your KYC is expiring. Share the OTP at http://bit.ly/example now.","content_type":"sms"}'
-```
+| Application | Screenshot |
+|---|---|
+| Landing Page | `screenshots/landing-page.png` |
+| Dashboard | `screenshots/dashboard.png` |
+| Scam Detection | `screenshots/detection.png` |
+| Analysis Results | `screenshots/results.png` |
+| Scam Awareness | `screenshots/awareness.png` |
 
-Response (abridged):
+Replace these placeholders with actual screenshots before submitting the project.
 
-```json
-{
-  "success": true,
-  "scan_id": "1",
-  "analysis_type": "rule_and_url",
-  "risk_score": 85,
-  "risk_level": "Critical",
-  "category": "Credential Theft",
-  "indicators": [
-    { "name": "OTP Request", "severity": "critical", "source": "rule_based" },
-    { "name": "URL shortener", "severity": "medium", "source": "url_based" }
-  ],
-  "recommendations": ["Never share your OTP with anyone.", "..."],
-  "ai_analysis": { "status": "unavailable", "provider": "gemini", "result": null }
-}
-```
+### 🎥 Demo Video
 
-`content_type` accepts `sms`, `whatsapp`, `payment_request`, `general`, `url`.
-Content is limited to 10,000 characters.
+**Project Demo:** Add your public demo video link here.
 
-## 14. Security and privacy
+Recommended demo flow:
 
-- Argon2id password hashing; plaintext passwords are never stored or logged.
-- JWTs verify `exp`, `iat`, `sub`, `iss`, `aud` and `type`, and only the
-  configured HMAC algorithm is accepted.
-- Production refuses to start without a strong `JWT_SECRET_KEY`.
-- 1 MB request-body limit, per-IP sliding-window rate limits and security headers
-  (`nosniff`, `DENY`, `no-referrer`, permissions policy, `no-store`, HSTS in
-  production).
-- Explicit CORS allowlist; every scan query is scoped by `user_id`.
-- Submitted message text is **not persisted** and not written to logs.
-- URL query values are redacted (`?token=[redacted]`) in responses and stored
-  indicators; URL analysis never opens, resolves or fetches a link.
-- Validation errors never echo submitted values.
-- Gemini keys stay in backend environment variables; when enabled, submitted text
-  is processed by Google under the Gemini API terms. Leave `GEMINI_API_KEY` empty
-  to keep all processing local.
+1. Introduce the problem.
+2. Show the dashboard.
+3. Submit a fake KYC scam message.
+4. Show the AI analysis and risk score.
+5. Submit a normal payment message.
+6. Demonstrate detection history.
+7. Explain the hybrid AI architecture and privacy protections.
 
-Known limitations are listed in [section 15](#15-known-limitations) and analysed
-in [`docs/PHASE_17_QA_REPORT.md`](docs/PHASE_17_QA_REPORT.md).
+## 🗺️ Future Roadmap
 
-## 15. Known limitations
+Potential improvements:
 
-- Detection is heuristic: it can miss scams and can flag legitimate messages. A
-  low score is not a guarantee of safety.
-- URL analysis is passive and cannot inspect live page content, domain age, TLS
-  certificates or redirect chains.
-- JWTs are stored in `localStorage`; a future XSS flaw could expose them. No
-  Content Security Policy is configured yet, and logout is client-side only
-  (tokens remain valid until expiry).
-- Rate limiting is in-process and per instance; multi-instance deployments need
-  a shared store.
-- No email verification, password reset, MFA, account lockout or account deletion.
-- Dashboard/analytics aggregate the user's scans in memory — fine for individual
-  accounts, needs SQL aggregation at larger scale.
-- No committed frontend unit or browser test suite; frontend verification is a
-  production build, lint and manual/one-off browser journeys.
-- PostgreSQL was verified at the SQL-dialect and driver level; no live PostgreSQL
-  instance was exercised in this environment.
-- The project has not had a professional penetration test or security
-  certification.
+- Hindi and Hinglish scam detection.
+- Advanced regional-language fraud analysis.
+- QR-code payment risk analysis.
+- Additional phishing intelligence.
+- Real-time scam pattern updates.
+- PostgreSQL production deployment.
+- Improved model benchmarking.
+- More comprehensive browser and accessibility testing.
+- Mobile-first experience.
 
-## 16. Deployment
+## 🏆 Hackathon Project
 
-| Item | Status |
-| --- | --- |
-| Frontend build for production | Verified (`npm run build`) |
-| Backend production mode (locally rehearsed) | Verified |
-| Alembic migrations | Verified (fresh upgrade, no drift, PostgreSQL DDL) |
-| `render.yaml` / `frontend/vercel.json` | Committed |
-| Backend deployment | **Not deployed** |
-| Frontend deployment | **Not deployed** |
-| Managed PostgreSQL | **Not provisioned** |
-| Live website / API URL | **None yet** |
+**Project:** UPI ScamShield AI  
+**Tagline:** Detect. Analyze. Protect.  
+**Developer:** Individual Project  
+**Event:** Arthaton 2026
 
-Deployment requires account access that is not available to the development
-environment. The complete runbook — every variable, the migration procedure, the
-Render and Vercel steps and the live verification checklist — is in
-[`docs/DEPLOYMENT_ARCHITECTURE.md`](docs/DEPLOYMENT_ARCHITECTURE.md).
+Built to explore how AI, explainable risk scoring, and security engineering can help people make safer decisions in the digital payment ecosystem.
 
-## 17. Testing
+## 🤝 Contributing
 
-```bash
-cd backend
-source .venv/Scripts/activate
-pytest -v
-```
+Contributions, suggestions, and feedback are welcome.
 
-**Result: 104 passed, 2 warnings (deprecation notices), 0 failed.**
+1. Fork the repository.
+2. Create a feature branch.
+3. Make your changes.
+4. Run the relevant tests.
+5. Submit a pull request.
 
-| Check | Command | Result |
-| --- | --- | --- |
-| Backend tests | `pytest` | 104 passed |
-| Frontend build | `npm run build` | Passed in 1.20 s; `dist` 1.1 MB |
-| Frontend lint | `npm run lint` | 0 errors, 9 warnings |
-| npm audit | `npm audit` | 0 vulnerabilities |
-| pip audit | `python -m pip_audit` | No known vulnerabilities |
-| pip check | `python -m pip check` | No broken requirements |
-| Migration drift | `alembic check` | No new upgrade operations |
-| Production startup with unmigrated DB | — | Refused with an actionable error |
+## 📜 License
 
-Largest build chunks: entry `383.64 kB` (120.23 kB gzip), lazy Recharts chunk
-`398.37 kB` (113.39 kB gzip), lazy Awareness `82.98 kB` (24.25 kB gzip), CSS
-`76.58 kB` (12.17 kB gzip).
+Choose and add an appropriate open-source license before publishing. Until a license is added, the project should not be assumed to grant general reuse permissions.
 
-Previous QA (Phase 17) findings, fixes and residual risks:
-[`docs/PHASE_17_QA_REPORT.md`](docs/PHASE_17_QA_REPORT.md).
+---
 
-## 18. Hackathon submission
+<p align="center">
 
-The submission package lives in [`submission/`](submission/):
+### 🛡️ UPI ScamShield AI
 
-- [`PROJECT_DESCRIPTION.md`](submission/PROJECT_DESCRIPTION.md)
-- [`TECHNICAL_ARCHITECTURE.md`](submission/TECHNICAL_ARCHITECTURE.md)
-- [`DEMO_SCRIPT.md`](submission/DEMO_SCRIPT.md)
-- [`PRESENTATION_OUTLINE.md`](submission/PRESENTATION_OUTLINE.md)
-- [`SUBMISSION_CHECKLIST.md`](submission/SUBMISSION_CHECKLIST.md)
+**Detect. Analyze. Protect.**
 
-Screenshots and demo recording guidance:
-[`docs/SCREENSHOTS_AND_DEMO.md`](docs/SCREENSHOTS_AND_DEMO.md).
-Final project report: [`docs/FINAL_PROJECT_REPORT.md`](docs/FINAL_PROJECT_REPORT.md).
+*Building a safer digital payment experience with AI.*
 
-## 19. Future improvements
-
-- Move tokens to HttpOnly cookies with refresh rotation and server-side
-  revocation, and add a strict Content Security Policy.
-- Shared rate-limit store (Redis) and horizontally scaled workers.
-- SQL-side aggregation for dashboard and analytics at scale.
-- Frontend unit tests (Vitest) and a committed Playwright end-to-end suite.
-- Live URL intelligence: reputation feeds, TLS and redirect inspection via an
-  isolated, sandboxed fetcher — never from the API process.
-- Hindi and regional-language detection, QR/UPI intent parsing, screenshot OCR.
-- Email verification, password reset, MFA and account deletion.
-- Uptime monitoring, error tracking and automated database backups.
-
-## 20. Developer
-
-**Raj Patel** — individual project (design, frontend, backend, detection engine,
-security and documentation).
-GitHub: [@Rajpatel7878](https://github.com/Rajpatel7878)
-
-## License
-
-Released under the [MIT License](LICENSE).
+</p>
