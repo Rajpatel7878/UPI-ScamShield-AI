@@ -23,7 +23,18 @@ logger = logging.getLogger(__name__)
 import httpx
 
 from app.core.config import get_settings
-from app.services.detection.gemini_service import GeminiResponse, GeminiIndicator, validate_risk_level, validate_severity, build_analysis_prompt, parse_structured_analysis
+from app.services.detection.gemini_service import (
+    GeminiResponse,
+    GeminiIndicator,
+    build_analysis_prompt,
+    parse_structured_analysis,
+    redact_credentials,
+    validate_risk_level,
+    validate_severity,
+)
+
+# Shared credential masking, applied before any provider request.
+_redact_credentials = redact_credentials
 
 
 DEFAULT_BASE_URL = "https://openrouter.ai/api/v1"
@@ -91,21 +102,6 @@ def _sanitize_error_message(error: Exception) -> str:
     )
     message = re.sub(r"(?i)(key=)[^\s&]+", r"\1[REDACTED]", message)
     return message[:300]
-
-
-def _redact_credentials(content: str) -> str:
-    """Mask UPI PIN and OTP values in content before AI requests.
-
-    Security: credentials are never sent to the AI provider. Patterns like
-    ``UPI PIN 1234`` or ``OTP 123456`` are replaced with ``[REDACTED]``.
-    """
-    # Mask UPI PIN patterns (e.g., "UPI PIN 4321")
-    content = re.sub(r"[Uu][Pp][Ii]\s+PIN\s+\d+", "UPI PIN [REDACTED]", content)
-    # Mask OTP patterns (e.g., "OTP 998877")
-    content = re.sub(r"[Oo][Tt][Pp]\s+\d+", "OTP [REDACTED]", content)
-    # Mask standalone 4-6 digit PINs that appear in context
-    content = re.sub(r"\b\d{4,6}\b", "[REDACTED]", content)
-    return content
 
 
 class OpenRouterService:

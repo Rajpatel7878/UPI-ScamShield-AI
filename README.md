@@ -53,11 +53,12 @@ Instead of simply saying whether something is suspicious, ScamShield helps users
 Combines rule-based detection with AI analysis to identify suspicious patterns and contextual scam techniques.
 
 ### 🤖 Multi-Provider AI Architecture
-Integrates two AI providers:
-- **Google Gemini** – contextual scam analysis.
-- **OpenRouter** – access to configurable AI models.
+Integrates two AI providers in a fixed order:
+1. **OpenRouter** – primary provider, used whenever `OPENROUTER_API_KEY` is set.
+2. **Google Gemini** – fallback, used when OpenRouter is unavailable or its call fails.
+3. **Rule-based + URL analysis** – used when neither provider is configured or both fail.
 
-Includes provider fallback and a rule-based detection path when AI services are unavailable.
+With neither key set, the backend makes no external AI request at all. Provider fallback and a rule-based detection path keep the API working when AI services are unavailable.
 
 ### 📊 Explainable Risk Scoring
 Every analysis produces a risk score and corresponding category.
@@ -153,7 +154,7 @@ flowchart TB
 | Validation | Pydantic |
 | Database | SQLAlchemy, SQLite |
 | Migrations | Alembic |
-| AI Providers | Google Gemini, OpenRouter |
+| AI Providers | OpenRouter (primary), Google Gemini (fallback) |
 | AI SDK | Google GenAI, HTTPX |
 | Authentication | JWT, Argon2 |
 | Testing | Pytest |
@@ -211,8 +212,7 @@ Install the following:
 - Python 3.11 or compatible project-supported version.
 - Node.js and npm.
 - Git.
-- Google Gemini API key.
-- OpenRouter API key.
+- Optional: an OpenRouter and/or Google Gemini API key (without either, the app runs rule + URL analysis only).
 
 ### 1. Clone the Repository
 
@@ -239,10 +239,15 @@ cp .env.example .env
 Configure the required variables in `backend/.env`:
 
 ```env
-GEMINI_API_KEY=your_gemini_api_key
+# Optional: OpenRouter is tried first, Gemini is the fallback.
+# Leave both empty to run rule + URL analysis only.
 OPENROUTER_API_KEY=your_openrouter_api_key
+OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+OPENROUTER_MODEL=google/gemini-3.5-flash
+OPENROUTER_TIMEOUT_SECONDS=30
+OPENROUTER_MAX_RETRIES=2
 
-AI_PROVIDER=auto
+GEMINI_API_KEY=your_gemini_api_key
 ```
 
 Keep all API keys private. Never commit `.env` to GitHub.
@@ -310,6 +315,18 @@ npm run lint
 npm run build
 npm audit
 ```
+
+### AI provider testing
+
+The provider tests are fully mocked: they inject an `httpx.MockTransport` for
+OpenRouter and patch the Gemini SDK client, so no real API key is used and no
+API credits are consumed. They cover OpenRouter success, OpenRouter failure
+followed by Gemini success, both providers failing, neither provider configured,
+provider/model metadata and OTP/UPI PIN masking before provider requests.
+
+Live provider behaviour has **not** been verified in this environment because no
+AI key is configured here. A deployed instance with a real key must be checked
+separately before live AI analysis is claimed.
 
 ### Security Testing
 

@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import time
 from typing import Any
 from typing import Dict
@@ -174,6 +175,18 @@ def build_analysis_prompt(content: str, content_type: str = "text") -> str:
     return prompt
 
 
+def redact_credentials(content: str) -> str:
+    """Mask UPI PIN and OTP values before any AI provider request.
+
+    Shared by the Gemini and OpenRouter services so credentials are never sent
+    to a third-party provider, regardless of which one handles the request.
+    """
+    content = re.sub(r"(?i)\bUPI\s+PIN\s+\d+", "UPI PIN [REDACTED]", content)
+    content = re.sub(r"(?i)\bOTP\s+\d+", "OTP [REDACTED]", content)
+    content = re.sub(r"\b\d{4,6}\b", "[REDACTED]", content)
+    return content
+
+
 def parse_structured_analysis(content: Optional[str]) -> Optional[dict]:
     """Parse the structured JSON response from an AI provider.
 
@@ -300,8 +313,9 @@ class GeminiService:
                 "result": None,
             }
 
-        # Build the analysis prompt
-        prompt = self._build_prompt(content, content_type)
+        # Credentials (UPI PIN, OTP) are masked before the provider request.
+        # Build the analysis prompt from the redacted text.
+        prompt = self._build_prompt(redact_credentials(content), content_type)
         call_timeout = timeout if timeout is not None else self._timeout
 
         # Call Gemini with retries

@@ -21,8 +21,9 @@
 
 UPI ScamShield AI is a full-stack educational fraud-analysis application for
 suspicious UPI and banking messages. It combines an explainable rule engine,
-passive URL inspection and optional Google Gemini analysis to produce a risk
-score, the indicators behind it and practical safety recommendations. Signed-in
+passive URL inspection and optional AI analysis (OpenRouter first, Google Gemini
+as fallback) to produce a risk score, the indicators behind it and practical
+safety recommendations. Signed-in
 users get scan history and analytics; a Scam Awareness Center provides prevention
 content.
 
@@ -35,7 +36,7 @@ content.
 | Detection | SMS, WhatsApp, payment request, general text and URL analysis | Completed |
 | Rule engine | Weighted, explainable indicators across 10 fraud categories | Completed |
 | URL engine | Passive structural analysis with query-value redaction | Completed |
-| AI | Optional Gemini call with schema validation, timeouts, retries, fallback | Completed |
+| AI | Optional OpenRouter → Gemini fallback with schema validation, timeouts, retries | Completed |
 | Hybrid scoring | `max(rule, url)` base, documented 60/40 AI merge when valid | Completed |
 | History | Filters, sorting, pagination, detail, delete-all, owner isolation | Completed |
 | Dashboard | User-scoped statistics, recent scans, risk insights | Completed |
@@ -57,7 +58,7 @@ Alembic revision, and a stale Phase 1 architecture document.
 ```text
 Browser → React 19 SPA (Vite) → HTTPS /api/v1 → FastAPI (Uvicorn)
       → SQLAlchemy → SQLite (local) / PostgreSQL (production)
-      → Google Gemini API (optional, backend-only key)
+      → OpenRouter API, then Google Gemini API (optional, backend-only keys)
 
 Planned hosting: Vercel (frontend) · Render (backend) · managed PostgreSQL
 ```
@@ -75,13 +76,18 @@ Details: [`ARCHITECTURE.md`](ARCHITECTURE.md),
 - **Backend:** Python 3.11+ (developed on 3.14.6), FastAPI 0.162, Uvicorn 0.54, Pydantic 2
 - **Data:** SQLAlchemy 2.1, Alembic 1.20, psycopg 3.3, SQLite (local), PostgreSQL (production)
 - **Auth:** PyJWT 2.15 (HS256), passlib + Argon2id
-- **AI:** Google Gemini via `google-genai` (optional)
+- **AI:** OpenRouter via HTTPX (primary), Google Gemini via `google-genai` (fallback); both optional
 - **Quality:** pytest, httpx TestClient, oxlint, pip-audit, npm audit
 
 ## 5. AI integration
 
-- Gemini is called only when `GEMINI_API_KEY` is configured; the key never leaves
-  the backend.
+- Provider order is fixed: OpenRouter is attempted first when
+  `OPENROUTER_API_KEY` is configured, then Gemini when
+  `GEMINI_API_KEY` is configured. If neither key is set, no external AI request
+  is made and the response reports `ai_analysis.status: unavailable`.
+- The response reports the provider and model that actually produced the
+  result (`openrouter` or `gemini`); neither is reported as the other.
+- API keys are read only on the backend and never leave it.
 - Submitted text is JSON-encoded inside an `<untrusted_message>` block with
   separate system instructions; this reduces, but does not eliminate, prompt
   injection.
@@ -91,9 +97,10 @@ Details: [`ARCHITECTURE.md`](ARCHITECTURE.md),
 - Calls run in a worker thread with a provider timeout (30 s default), a ~35 s
   hard wall-clock bound and at most two retries; failure falls back to rules and
   URL analysis, and the response reports `ai_analysis.status: unavailable`.
-- **Not tested with a live key in this environment** — no `GEMINI_API_KEY` is
-  configured locally; Gemini behaviour is covered by mocked tests only. Live
-  AI behaviour must be re-checked after the key is set on the deployed backend.
+- **Mocked testing only** — no OpenRouter or Gemini key is configured in this
+  environment, so provider behaviour is covered by mocked tests (injected HTTP
+  transport and patched Gemini SDK client) and never by live API calls. Live AI
+  behaviour must be re-checked after a key is set on the deployed backend.
 
 ## 6. Security implementation
 
@@ -197,7 +204,8 @@ Run `git log -1 --stat` on `main` for the exact hash and file list.
    deletion; no per-scan deletion (delete-all only).
 6. Dashboard/analytics aggregate in memory; needs SQL aggregation at scale.
 7. No committed frontend automated tests; no load testing.
-8. Gemini live calls unverified in this environment (no key).
+8. Live OpenRouter and Gemini calls unverified in this environment (no keys);
+   provider routing is covered by mocked tests only.
 9. PostgreSQL verified only at the dialect/driver level.
 10. No formal security certification or penetration test.
 

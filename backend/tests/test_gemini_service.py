@@ -344,7 +344,7 @@ def test_build_ai_analysis_failed():
     """Test AI analysis builder with failed status."""
     from app.api.routes.detect import _build_ai_analysis
 
-    gemini_result = {"status": "failed", "model": "gemini-2.5-flash"}
+    gemini_result = {"status": "failed", "provider": "gemini", "model": "gemini-2.5-flash"}
     ai_status = "failed"
 
     result = _build_ai_analysis(gemini_result, ai_status)
@@ -362,7 +362,7 @@ def test_build_ai_analysis_unavailable():
 
     result = _build_ai_analysis(gemini_result, ai_status)
     assert result["status"] == "unavailable"
-    assert result["provider"] == "gemini"
+    assert result["provider"] == "none"
     assert result["result"] is None
 
 

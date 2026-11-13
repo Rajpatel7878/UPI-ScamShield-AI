@@ -37,6 +37,17 @@ services:
       # X-Forwarded-For and rate limiting must key on the real address.
       - key: TRUST_PROXY_HEADERS
         value: true
+      # AI providers. OpenRouter is tried first; Gemini is the fallback. Both
+      # keys are optional: with neither set, only rule + URL analysis runs and
+      # no external request is made.
+      - key: OPENROUTER_BASE_URL
+        value: https://openrouter.ai/api/v1
+      - key: OPENROUTER_MODEL
+        value: google/gemini-3.5-flash
+      - key: OPENROUTER_TIMEOUT_SECONDS
+        value: 30
+      - key: OPENROUTER_MAX_RETRIES
+        value: 2
       - key: GEMINI_MODEL
         value: gemini-2.5-flash
       - key: GEMINI_TIMEOUT_SECONDS
@@ -53,7 +64,9 @@ services:
       # https://upi-scamshield-ai.vercel.app (no trailing slash).
       - key: FRONTEND_URL
         sync: false
-      # Optional. Leave empty to run rule + URL analysis only.
+      # Optional. Leave both empty to run rule + URL analysis only.
+      - key: OPENROUTER_API_KEY
+        sync: false
       - key: GEMINI_API_KEY
         sync: false
 

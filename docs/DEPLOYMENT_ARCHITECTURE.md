@@ -18,8 +18,9 @@ database migration procedure and the exact manual steps required to go live.
                                       │                                        ├── managed PostgreSQL
                                       │                                        │   (Render Postgres / Neon)
                                       │                                        │
-                                      │                                        └── Google Gemini API
-                                      │                                            (optional, backend-only key)
+                                      │                                        └── OpenRouter API (primary)
+                                      │                                            → Google Gemini API (fallback)
+                                      │                                            (optional, backend-only keys)
                                       └── static assets, SPA fallback
 ```
 
@@ -28,7 +29,7 @@ database migration procedure and the exact manual steps required to go live.
 | Frontend | Vercel | Vite build, static output, SPA rewrite, security headers |
 | Backend | Render (web service, Python runtime) | Uvicorn, `alembic upgrade head` before start |
 | Database | Render managed PostgreSQL or Neon | SQLAlchemy + psycopg 3; SQLite only for local development |
-| AI | Google Gemini API | Optional; called only from the backend |
+| AI | OpenRouter API (primary), Google Gemini API (fallback) | Optional; called only from the backend; no request is made when neither key is set |
 
 The frontend and backend are separate origins, so CORS is configured explicitly
 on the backend through `FRONTEND_URL` (the deployed Vercel domain).
@@ -80,10 +81,19 @@ Secrets are configured in the hosting dashboards and are never committed. Only
 | `JWT_SECRET_KEY` | generated (32+ chars) | `generateValue: true` in the blueprint; rotate to invalidate all sessions |
 | `FRONTEND_URL` | deployed Vercel origin, no trailing slash | Primary CORS allowlist entry |
 | `CORS_ORIGINS` | optional comma-separated extras | Wildcards are discarded |
-| `GEMINI_API_KEY` | optional | Leave empty to run rule + URL analysis only |
+| `OPENROUTER_API_KEY` | optional | Primary AI provider; leave empty to skip OpenRouter |
+| `OPENROUTER_BASE_URL` | `https://openrouter.ai/api/v1` | OpenAI-compatible endpoint |
+| `OPENROUTER_MODEL` | `google/gemini-3.5-flash` | Model id sent to OpenRouter |
+| `OPENROUTER_TIMEOUT_SECONDS` | `30` | Provider call timeout |
+| `OPENROUTER_MAX_RETRIES` | `2` | Bounded retries for transient errors |
+| `GEMINI_API_KEY` | optional | Fallback provider, used when OpenRouter is unavailable or fails |
 | `GEMINI_MODEL` | `gemini-2.5-flash` | |
 | `GEMINI_TIMEOUT_SECONDS` | `30` | Provider call timeout |
 | `GEMINI_MAX_RETRIES` | `2` | Bounded retries |
+
+Provider order at runtime: OpenRouter (if `OPENROUTER_API_KEY` is set) → Gemini
+(if `GEMINI_API_KEY` is set) → rule-based + URL analysis. With neither key set
+no external AI request is made.
 | `TRUST_PROXY_HEADERS` | `true` on Render | Rate limiting keys on the real client IP |
 | `MAX_REQUEST_BYTES` | `1048576` | Requests above 1 MB are rejected with `413` |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | `30` | |
@@ -170,7 +180,9 @@ login, analyze, history) before it is presented as live.
    PostgreSQL instance on Render or Neon and paste its URL into `DATABASE_URL`.
 4. Set the `sync: false` variables:
    - `FRONTEND_URL` — the Vercel URL (add it after step 6, then redeploy);
-   - `GEMINI_API_KEY` — optional; leave empty to disable AI analysis.
+   - `OPENROUTER_API_KEY` — optional; primary AI provider;
+   - `GEMINI_API_KEY` — optional; fallback AI provider. Leave both empty to run
+     rule + URL analysis only.
 5. Deploy. In the logs confirm, in order:
    - `Running upgrade -> 70e8fa9ea9cc`
    - `Production schema verified (users, scans)`
@@ -223,7 +235,7 @@ curl -s https://<backend-host>/api/v1/health
   `METHOD /path -> status (duration ms)`. Request bodies and query strings are
   not logged.
 - `/api/v1/health` is the platform health check; it also reports database
-  connectivity and whether Gemini is configured.
+  connectivity and which AI providers (OpenRouter, Gemini) are configured.
 - Uptime monitors can poll `/api/v1/health` (expect `200`) and receive `503`
   during a database outage.
 

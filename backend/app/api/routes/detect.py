@@ -90,37 +90,45 @@ def _redact_url(url: str) -> str:
 
 
 def _build_ai_analysis(
-    gemini_result: Optional[dict[str, Any]],
+    ai_result: Optional[dict[str, Any]],
     ai_status: str,
 ) -> dict[str, Any]:
     """Build the ``ai_analysis`` response section.
 
-    A result is only reported as completed when both the overall status and the
-    provider result are present. Anything else is reported as unavailable so the
-    client never treats missing AI analysis as a completed assessment.
+    The provider and model always come from the service that produced the
+    result, so an OpenRouter answer is never reported as Gemini. A result is
+    only reported as completed when both the overall status and the provider
+    result are present. Anything else is reported as unavailable so the client
+    never treats missing AI analysis as a completed assessment.
     """
+    provider = "none"
+    model: Optional[str] = None
+    if isinstance(ai_result, dict):
+        provider = str(ai_result.get("provider") or "none")
+        model = ai_result.get("model")
+
     completed = (
         ai_status == "completed"
-        and isinstance(gemini_result, dict)
-        and gemini_result.get("status") == "completed"
-        and gemini_result.get("result") is not None
+        and isinstance(ai_result, dict)
+        and ai_result.get("status") == "completed"
+        and ai_result.get("result") is not None
     )
     if not completed:
         return {
             "status": "unavailable",
-            "provider": "gemini",
-            "model": (gemini_result or {}).get("model"),
+            "provider": provider,
+            "model": model,
             "result": None,
         }
 
-    result = gemini_result.get("result")
+    result = ai_result.get("result")
     if hasattr(result, "model_dump"):
         result = result.model_dump()
 
     return {
         "status": "completed",
-        "provider": "gemini",
-        "model": gemini_result.get("model"),
+        "provider": provider,
+        "model": model,
         "result": result,
     }
 
@@ -312,9 +320,9 @@ async def analyze(
     indicators.extend(url_indicators)
     recommendations.extend(url_analysis.get("merged_recommendations") or [])
 
-    gemini_result = await _analyze_with_gemini(request.content, content_type)
-    ai_status = "completed" if gemini_result and gemini_result.get("status") == "completed" else "unavailable"
-    ai_analysis = _build_ai_analysis(gemini_result, ai_status)
+    ai_result = await _analyze_with_ai(request.content, content_type)
+    ai_status = "completed" if ai_result and ai_result.get("status") == "completed" else "unavailable"
+    ai_analysis = _build_ai_analysis(ai_result, ai_status)
 
     final_score = base_score
     final_level = base_level
@@ -326,8 +334,9 @@ async def analyze(
     )
     summary += f" URL analysis checked {url_analysis.get('urls_found', 0)} URL(s)."
 
-    # Gemini is merged only when the provider returned a validated result.
-    # HybridScorer uses the documented 60/40 weights and falls back cleanly.
+    # The AI result is merged only when the provider returned a validated
+    # result. HybridScorer uses the documented 60/40 weights and falls back
+    # cleanly to rule and URL analysis.
     if ai_analysis["status"] == "completed":
         hybrid = HybridScorer().score(
             rule_score=base_score,
@@ -335,7 +344,7 @@ async def analyze(
             rule_category=category,
             rule_indicators=indicators,
             rule_recommendations=recommendations,
-            gemini_result=gemini_result,
+            gemini_result=ai_result,
         )
         final_score = _safe_int(hybrid.get("hybrid_score", final_score), final_score)
         final_level = _normalize_risk_level(hybrid.get("risk_level")) or final_level
