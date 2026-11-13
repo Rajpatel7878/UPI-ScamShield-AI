@@ -502,6 +502,69 @@ def test_endpoint_makes_no_ai_calls_without_keys(detect_client, monkeypatch):
     assert body["analysis_type"] in {"rule_based_only", "rule_and_url"}
 
 
+def test_endpoint_uses_real_openrouter_service_with_mock_transport(detect_client, monkeypatch):
+    """Full stack through /detect/analyze with the real service, mocked transport.
+
+    Only the HTTP transport and the API key are substituted: the endpoint calls
+    ``_analyze_with_ai`` -> ``_analyze_with_openrouter``, which builds a real
+    ``OpenRouterService``. No request leaves the process.
+    """
+    requests = []
+
+    def handler(request):
+        requests.append(request)
+        return _chat_response(
+            _analysis_payload(risk_level="critical", category="Credential Theft")
+        )
+
+    real_service = openrouter_module.OpenRouterService
+
+    def factory():
+        return real_service(transport=httpx.MockTransport(handler))
+
+    monkeypatch.setenv("OPENROUTER_API_KEY", TEST_KEY)
+    monkeypatch.setenv("OPENROUTER_MODEL", "mock/provider-model")
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.setattr(openrouter_module, "OpenRouterService", factory)
+
+    response = detect_client.post(
+        "/api/v1/detect/analyze",
+        json={
+            "content": (
+                "Your account will be blocked. Share your UPI PIN 4321 and "
+                "OTP 998877 at https://secure-kyc-verify.example.com/verify now."
+            ),
+            "content_type": "sms",
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+
+    # Exactly one provider call, against the mocked transport.
+    assert len(requests) == 1
+    request = requests[0]
+    assert str(request.url) == CHAT_URL
+    assert request.headers["authorization"] == f"Bearer {TEST_KEY}"
+
+    # The configured model flows through both the request and the response.
+    outbound = json.loads(request.content)
+    assert outbound["model"] == "mock/provider-model"
+    assert body["ai_analysis"]["provider"] == "openrouter"
+    assert body["ai_analysis"]["model"] == "mock/provider-model"
+    assert body["ai_analysis"]["status"] == "completed"
+    assert body["ai_analysis"]["result"]["risk_level"] == "critical"
+
+    # The real service's masking runs before the request is serialized.
+    prompt = outbound["messages"][0]["content"]
+    assert "4321" not in prompt
+    assert "998877" not in prompt
+    assert "[REDACTED]" in prompt
+
+    # Validated AI output participates in hybrid scoring.
+    assert body["analysis_type"] == "hybrid"
+
+
 def test_build_ai_analysis_uses_provider_from_result():
     """Metadata comes from the service result, not a hardcoded provider."""
     openrouter = _ai_result("openrouter", "openrouter-model")
