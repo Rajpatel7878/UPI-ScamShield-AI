@@ -3,12 +3,17 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import TYPE_CHECKING
 
 from sqlalchemy import DateTime, ForeignKey, Integer, String
 from sqlalchemy import UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.base import Base
+
+if TYPE_CHECKING:  # pragma: no cover - import for type checkers only
+    from app.models.device import Device
+    from app.models.scan import Scan
 
 
 class User(Base):
@@ -57,6 +62,13 @@ class User(Base):
 
     # Relationship: one user can have multiple scans
     scans: Mapped[list["Scan"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+        lazy="select",
+    )
+
+    # Relationship: one user can have multiple registered devices
+    devices: Mapped[list["Device"]] = relationship(
         back_populates="user",
         cascade="all, delete-orphan",
         lazy="select",

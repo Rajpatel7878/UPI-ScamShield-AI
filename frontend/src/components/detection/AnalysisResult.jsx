@@ -2,36 +2,68 @@ import { AlertCircle, ShieldCheck, Sparkles } from 'lucide-react'
 import { cn } from '../../utils/cn.js'
 
 const SEVERITY_STYLES = {
-  low: 'bg-brand-500/10 text-brand-300',
-  medium: 'bg-emerald-500/10 text-emerald-400',
-  high: 'bg-amber-500/10 text-amber-400',
-  critical: 'bg-danger-500/10 text-danger-400',
+  low: 'bg-success-500/10 text-success-400 ring-success-500/25',
+  medium: 'bg-warning-500/10 text-warning-400 ring-warning-500/25',
+  high: 'bg-danger-500/10 text-danger-400 ring-danger-500/25',
+  critical: 'bg-red-500 text-white ring-red-500/40',
+}
+
+const SEVERITY_LABELS = {
+  low: 'Low',
+  medium: 'Medium',
+  high: 'High',
+  critical: 'Critical',
 }
 
 const SEVERITY_BARS = {
-  low: 'bg-brand-400',
-  medium: 'bg-emerald-400',
-  high: 'bg-amber-400',
-  critical: 'bg-danger-500',
+  low: 'bg-success-500',
+  medium: 'bg-warning-500',
+  high: 'bg-danger-500',
+  critical: 'bg-red-500',
+}
+
+function riskColor(severity) {
+  const s = String(severity || 'low').toLowerCase()
+  if (s === 'critical') return '#ff365d'
+  if (s === 'high') return '#ef4444'
+  if (s === 'medium') return '#f59e0b'
+  return '#22c55e'
 }
 
 function RiskScore({ score, severity }) {
   const percent = Math.min(Math.max(Number(score) || 0, 0), 100)
+  const circumference = 2 * Math.PI * 24
+  const offset = circumference - (percent / 100) * circumference
+  const color = riskColor(severity)
+
   return (
-    <div>
-      <div className="flex items-baseline justify-between gap-2">
-        <span className="type-field-label">Risk score</span>
-        <span className="font-mono text-sm font-semibold text-ink">{percent}/100</span>
-      </div>
-      <div
-        className="mt-2 h-2 w-full overflow-hidden rounded-full bg-navy-700"
-        role="img"
-        aria-label={`Risk score ${percent} out of 100`}
+    <div className="relative">
+      <svg
+        className="risk-circle"
+        width="100"
+        height="100"
+        viewBox="0 0 56 56"
       >
-        <div
-          className={cn('h-full rounded-full transition-all duration-500', SEVERITY_BARS[severity] || SEVERITY_BARS.low)}
-          style={{ width: `${percent}%` }}
+        <circle
+          className="risk-circle-bg"
+          cx="28"
+          cy="28"
+          r="24"
         />
+        <circle
+          className="risk-circle-progress"
+          cx="28"
+          cy="28"
+          r="24"
+          stroke={color}
+          strokeDasharray={circumference}
+          strokeDashoffset={offset}
+          style={{ transition: 'stroke-dashoffset 1.2s cubic-bezier(0.22, 1, 0.36, 1)' }}
+        />
+      </svg>
+      <div className="risk-circle-content">
+        <span className="text-xs font-mono font-semibold text-ink">{percent}</span>
+        <span className="text-[10px] text-slate-500">/ 100</span>
       </div>
     </div>
   )
@@ -39,9 +71,13 @@ function RiskScore({ score, severity }) {
 
 function SeverityBadge({ severity }) {
   const value = String(severity || 'low').toLowerCase()
+  const style = SEVERITY_STYLES[value] ?? SEVERITY_STYLES.low
+  const label = SEVERITY_LABELS[value] ?? 'Low'
+
   return (
-    <span className={cn('inline-flex items-center rounded-full px-2 py-1 text-xs font-medium capitalize', SEVERITY_STYLES[value] || SEVERITY_STYLES.low)}>
-      {value}
+    <span className={cn('inline-flex items-center rounded-full px-3 py-1 text-xs font-medium ring-1 ring-inset', style)}>
+      <span className={cn('size-1.5 rounded-full', style === SEVERITY_STYLES.critical ? 'bg-white' : 'bg-current')} aria-hidden="true" />
+      {label} risk
     </span>
   )
 }
@@ -69,7 +105,10 @@ function indicatorSourceLabel(source, provider) {
 export function AnalysisResult({ result, hasResult, onDismiss }) {
   if (!hasResult || !result) {
     return (
-      <div className="rounded-card border border-dashed border-white/10 bg-navy-900/30 p-6 text-center">
+      <div className="rounded-xl border border-dashed border-white/10 bg-white/[0.02] p-8 text-center">
+        <div className="inline-flex size-12 items-center justify-center rounded-full bg-white/5 mb-4 text-slate-500">
+          <ShieldCheck className="size-5" aria-hidden="true" />
+        </div>
         <p className="type-body text-slate-500">
           Your analysis results will appear here.
         </p>
@@ -94,78 +133,105 @@ export function AnalysisResult({ result, hasResult, onDismiss }) {
   return (
     <section
       aria-labelledby="analysis-result-heading"
-      className="rounded-card border border-white/10 bg-navy-800 p-5 shadow-card sm:p-6"
+      className="rounded-xl border border-white/10 bg-white/5 p-6 glass-strong shadow-lift"
     >
-      <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="type-label">Analysis complete</p>
-          <h2 id="analysis-result-heading" className="type-h2 mt-1">
+          <p className="type-label text-slate-400">Analysis complete</p>
+          <h2 id="analysis-result-heading" className="type-h2 mt-1 font-display">
             {category}
           </h2>
         </div>
-        <div className="flex flex-col items-end gap-1">
+        <div className="flex flex-col items-end gap-2">
           <SeverityBadge severity={severity} />
-          <span className="type-caption">{analysisType?.replaceAll('_', ' ')}</span>
+          <span className="type-caption text-slate-500">
+            {analysisType?.replaceAll('_', ' ')}
+          </span>
         </div>
       </div>
 
-      <div className="mt-5 grid gap-4 sm:grid-cols-2">
-        <RiskScore score={riskScore} severity={severity} />
-        <div>
-          <p className="type-field-label">AI assistance</p>
-          <p className="type-caption mt-2 flex items-center gap-1.5">
-            <Sparkles className="size-3.5 text-brand-300" aria-hidden="true" />
-            {aiStatus === 'completed'
-              ? `${providerLabel(aiProvider)} analysis included${aiModel ? ` (${aiModel})` : ''}`
-              : 'Not used — rule and URL analysis only'}
+      <div className="mt-6 grid gap-6 sm:grid-cols-3">
+        <div className="rounded-xl border border-white/8 bg-white/[0.02] p-4">
+          <p className="type-field-label text-slate-400 mb-2">Risk score</p>
+          <RiskScore score={riskScore} severity={severity} />
+        </div>
+        <div className="rounded-xl border border-white/8 bg-white/[0.02] p-4 flex flex-col justify-between">
+          <div>
+            <p className="type-field-label text-slate-400">AI assistance</p>
+            <p className="type-caption mt-2 flex items-center gap-1.5 text-slate-400">
+              <Sparkles className="size-3.5 text-red-300" aria-hidden="true" />
+              {aiStatus === 'completed'
+                ? `${providerLabel(aiProvider)} analysis included${aiModel ? ` (${aiModel})` : ''}`
+                : 'Not used — rule and URL analysis only'}
+            </p>
+          </div>
+        </div>
+        <div className="rounded-xl border border-white/8 bg-white/[0.02] p-4">
+          <p className="type-field-label text-slate-400">Analysis type</p>
+          <p className="type-body mt-1 text-slate-300 capitalize">
+            {analysisType?.replaceAll('_', ' ')}
           </p>
         </div>
       </div>
 
-      <div className="mt-5">
-        <p className="type-field-label">Summary</p>
-        <p className="type-body mt-1">{summary}</p>
+      <div className="mt-6">
+        <p className="type-field-label text-slate-400">Summary</p>
+        <p className="type-body mt-1 text-slate-300 leading-relaxed">{summary}</p>
       </div>
 
       {indicators.length > 0 && (
-        <div className="mt-5">
-          <p className="type-field-label">Detected indicators</p>
-          <ul className="mt-2 space-y-2">
+        <div className="mt-6">
+          <p className="type-field-label text-slate-400 mb-3">Detected indicators</p>
+          <ul className="space-y-3">
             {indicators.map((indicator, index) => {
               const item = indicatorText(indicator)
               return (
-                <li key={`${item.name}-${index}`} className="rounded-lg border border-white/5 bg-navy-900/40 p-3">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <ShieldCheck className="size-3.5 text-brand-400" aria-hidden="true" />
-                    <span className="text-sm font-medium text-ink">{item.name || 'Indicator'}</span>
-                    {item.severity && <SeverityBadge severity={item.severity} />}
-                    {item.source && (
-                      <span className="type-caption">
-                        {indicatorSourceLabel(item.source, aiProvider)}
+                <li
+                  key={`${item.name}-${index}`}
+                  className="flex items-start gap-3 rounded-lg border border-white/5 bg-white/[0.02] p-4"
+                >
+                  <ShieldCheck className="mt-0.5 size-3.5 shrink-0 text-red-300" aria-hidden="true" />
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2 mb-1">
+                      <span className="text-sm font-semibold text-ink">
+                        {item.name || 'Indicator'}
                       </span>
+                      {item.severity && <SeverityBadge severity={item.severity} />}
+                      {item.source && (
+                        <span className="type-caption text-slate-500">
+                          Source: {indicatorSourceLabel(item.source, aiProvider)}
+                        </span>
+                      )}
+                    </div>
+                    {item.description && (
+                      <p className="type-body-sm text-slate-400 leading-relaxed">
+                        {item.description}
+                      </p>
+                    )}
+                    {item.url && (
+                      <p className="type-mono mt-2 break-all text-slate-500">
+                        {item.url}
+                      </p>
                     )}
                   </div>
-                  {item.description && (
-                    <p className="type-body-sm mt-1 text-slate-300">{item.description}</p>
-                  )}
-                  {item.url && (
-                    <p className="type-mono mt-1 break-all text-slate-500">{item.url}</p>
-                  )}
                 </li>
               )
             })}
           </ul>
+          <p className="type-caption mt-3 text-slate-500">
+            Heuristic findings should be treated as indicators, not verified proof of fraud.
+          </p>
         </div>
       )}
 
       {recommendedActions.length > 0 && (
-        <div className="mt-5">
-          <p className="type-field-label">Recommended actions</p>
-          <ul className="mt-2 space-y-1.5">
+        <div className="mt-6">
+          <p className="type-field-label text-slate-400 mb-3">Recommended actions</p>
+          <ul className="space-y-2">
             {recommendedActions.map((action, index) => (
-              <li key={`${action}-${index}`} className="flex items-start gap-2 text-sm text-slate-300">
-                <AlertCircle className="mt-0.5 size-3.5 shrink-0 text-warning-400" aria-hidden="true" />
-                <span>{action}</span>
+              <li key={`${action}-${index}`} className="flex items-start gap-3 p-3 rounded-lg border border-white/5 bg-white/[0.02]">
+                <AlertCircle className="mt-0.5 size-4 shrink-0 text-warning-500" aria-hidden="true" />
+                <p className="type-body-sm text-slate-300 leading-relaxed">{action}</p>
               </li>
             ))}
           </ul>
@@ -173,13 +239,13 @@ export function AnalysisResult({ result, hasResult, onDismiss }) {
       )}
 
       {safetyWarning && (
-        <div className="mt-5 rounded-lg border border-danger-500/20 bg-danger-500/5 p-3">
-          <p className="type-field-label text-danger-400">Safety warning</p>
-          <p className="type-body-sm mt-1 text-slate-300">{safetyWarning}</p>
+        <div className="mt-6 rounded-xl border border-red-500/25 bg-red-500/5 p-4">
+          <p className="type-field-label text-red-400 mb-1">Safety warning</p>
+          <p className="type-body-sm text-slate-300">{safetyWarning}</p>
         </div>
       )}
 
-      <p className="type-caption mt-4">
+      <p className="type-caption mt-6 text-slate-500">
         Heuristic risk assessment — not proof that a message is fraudulent. URLs
         are never opened or fetched.
       </p>
@@ -187,7 +253,7 @@ export function AnalysisResult({ result, hasResult, onDismiss }) {
       <button
         type="button"
         onClick={onDismiss}
-        className="mt-4 w-full rounded-lg border border-navy-700 bg-navy-900/50 px-4 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-white/5"
+        className="mt-6 w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-slate-300 transition-all duration-300 hover:bg-white/10 hover:border-white/20 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-400"
       >
         Clear result
       </button>

@@ -25,7 +25,7 @@ export function CheckboxField({
           type="checkbox"
           aria-invalid={error ? true : undefined}
           aria-describedby={descriptionId}
-          className="mt-0.5 size-4 shrink-0 cursor-pointer rounded border-navy-600 bg-navy-950 accent-brand-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-400 disabled:cursor-not-allowed disabled:opacity-60"
+          className="mt-0.5 size-4 shrink-0 cursor-pointer rounded border-white/20 bg-white/[0.03] accent-brand-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-400 disabled:cursor-not-allowed disabled:opacity-50"
           {...props}
         />
         <div className="flex flex-col gap-0.5">

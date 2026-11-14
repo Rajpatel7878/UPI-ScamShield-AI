@@ -1,5 +1,6 @@
 export { CTASection } from './CTASection.jsx'
 export { DemoAnalysis } from './DemoAnalysis.jsx'
+export { FAQSection } from './FAQSection.jsx'
 export { FeatureSection } from './FeatureSection.jsx'
 export { Footer } from './Footer.jsx'
 export { HeroPreview } from './HeroPreview.jsx'

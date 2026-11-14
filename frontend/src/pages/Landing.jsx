@@ -1,6 +1,7 @@
 import {
   CTASection,
   DemoAnalysis,
+  FAQSection,
   FeatureSection,
   Footer,
   HeroSection,
@@ -29,6 +30,7 @@ function Landing() {
         <HowItWorks />
         <DemoAnalysis />
         <SecuritySection />
+        <FAQSection />
         <CTASection />
       </main>
 

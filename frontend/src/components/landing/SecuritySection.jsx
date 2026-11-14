@@ -1,14 +1,14 @@
-import { Check, KeyRound, Landmark, Link2, Lock, ShieldAlert, Trash2 } from 'lucide-react'
-import { Container } from '../common/Container.jsx'
-import { SectionHeader } from '../common/SectionHeader.jsx'
-import { BaseCard, InfoCard } from '../ui/index.js'
+import { Check, KeyRound, Landmark, Link2, Lock, ShieldAlert, Trash2 } from 'lucide-react';
+import { Container } from '../common/Container.jsx';
+import { SectionHeader } from '../common/SectionHeader.jsx';
+import { GlassCard, InfoCard } from '../ui/index.js';
 
 const PRINCIPLES = [
   {
     icon: KeyRound,
     title: 'We never ask for your UPI PIN or OTP',
     description:
-      'No screen in this product will request the credentials used to authorise a payment.',
+      'No screen in this product will request the credentials used to authorize a payment.',
   },
   {
     icon: Lock,
@@ -32,20 +32,24 @@ const PRINCIPLES = [
     icon: Landmark,
     title: 'Verify important actions with your bank',
     description:
-      'AI assessments can make mistakes and do not replace your bank\u2019s official app or website.',
+      'AI assessments can make mistakes and do not replace your bank&rsquo;s official app or website.',
   },
-]
+];
 
 export function SecuritySection() {
   return (
     <section
       id="security"
       aria-labelledby="security-title"
-      className="scroll-mt-24 border-y border-white/5 bg-navy-900/30 py-16 sm:py-20 lg:py-24"
+      className="scroll-mt-24 border-y border-white/5 py-16 sm:py-20 lg:py-28 relative overflow-hidden"
     >
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 bg-gradient-to-b from-transparent to-red-500/5"
+      />
       <Container size="xl">
-        <div className="grid gap-10 lg:grid-cols-[0.9fr_1.1fr] lg:items-start lg:gap-14">
-          <div>
+        <div className="grid gap-14 lg:grid-cols-[0.9fr_1.2fr] lg:items-start lg:gap-16">
+          <div className="animate-fade-up entrance-1">
             <SectionHeader
               id="security-title"
               eyebrow="Security & privacy"
@@ -54,42 +58,40 @@ export function SecuritySection() {
             />
           </div>
 
-          <BaseCard padding="lg">
-            <ul className="grid gap-5 sm:grid-cols-2 sm:gap-6">
+          <GlassCard padding="xl" className="animate-fade-up entrance-2 neon-border-red">
+            <ul className="grid gap-6 sm:grid-cols-2 sm:gap-8">
               {PRINCIPLES.map(({ icon: Icon, title, description }) => (
-                <li key={title} className="flex items-start gap-3">
-                  <span className="mt-0.5 inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-brand-500/10 text-brand-300 ring-1 ring-brand-500/20">
-                    <Icon className="size-4" aria-hidden="true" />
+                <li key={title} className="flex items-start gap-4">
+                  <span className="mt-0.5 inline-flex size-10 shrink-0 items-center justify-center rounded-xl bg-red-500/10 text-red-300 ring-1 ring-red-500/20">
+                    <Icon className="size-5" aria-hidden="true" />
                   </span>
                   <div className="min-w-0">
-                    <p className="text-sm font-medium text-ink">{title}</p>
-                    <p className="type-caption mt-1">{description}</p>
+                    <p className="type-h3 text-ink">{title}</p>
+                    <p className="type-caption mt-1.5">{description}</p>
                   </div>
                 </li>
               ))}
-              <li className="flex items-start gap-3">
-                <span className="mt-0.5 inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-success-500/10 text-success-400 ring-1 ring-success-500/20">
-                  <Check className="size-4" aria-hidden="true" />
+              <li className="flex items-start gap-4">
+                <span className="mt-0.5 inline-flex size-10 shrink-0 items-center justify-center rounded-xl bg-success-500/10 text-success-500 ring-1 ring-success-500/20">
+                  <Check className="size-5" aria-hidden="true" />
                 </span>
                 <div className="min-w-0">
-                  <p className="text-sm font-medium text-ink">
-                    Clear, responsible language
-                  </p>
-                  <p className="type-caption mt-1">
-                    Warnings describe what looks suspicious without claiming
-                    certainty.
+                  <p className="type-h3 text-ink">Clear, responsible language</p>
+                  <p className="type-caption mt-1.5">
+                    Warnings describe what looks suspicious without claiming certainty.
                   </p>
                 </div>
               </li>
             </ul>
-          </BaseCard>
+          </GlassCard>
         </div>
 
-        <div className="mt-8">
+        <div className="mt-12">
           <InfoCard
             title="Assessments are guidance, not guarantees"
             icon={ShieldAlert}
             tone="warning"
+            className="animate-fade-up entrance-3"
           >
             AI-assisted assessments can be wrong or incomplete. Always confirm
             unexpected requests through your bank&rsquo;s official app or website
@@ -99,5 +101,5 @@ export function SecuritySection() {
         </div>
       </Container>
     </section>
-  )
+  );
 }

@@ -1,0 +1,107 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend (tests, lint, PostgreSQL)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: scamshield_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d scamshield_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      ENVIRONMENT: development
+      JWT_SECRET_KEY: ci-only-secret-key-at-least-32-characters
+      DATABASE_URL: sqlite:///./ci_scamshield.db
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements*.txt
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
+
+      - name: Compile application
+        run: python -m compileall -q app
+
+      - name: Ruff (undefined names, syntax, import errors)
+        run: python -m ruff check app --select E9,F
+
+      - name: Backend tests (SQLite)
+        run: python -m pytest -q
+
+      - name: Apply Alembic migrations on PostgreSQL
+        env:
+          DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/scamshield_ci
+        run: |
+          python -m alembic upgrade head
+          python -m alembic current
+
+      - name: Analytics aggregate tests on PostgreSQL
+        env:
+          TEST_POSTGRES_URL: postgresql+psycopg://postgres:postgres@localhost:5432/scamshield_ci
+        run: python -m pytest -q tests/test_analytics_aggregates.py
+
+  frontend:
+    name: Frontend (audit, lint, build)
+    runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_API_BASE_URL: https://api.example.com/api/v1
+    defaults:
+      run:
+        working-directory: nextjs-frontend
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: nextjs-frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Dependency audit
+        run: npm audit
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Production build
+        run: npm run build

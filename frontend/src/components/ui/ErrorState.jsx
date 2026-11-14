@@ -14,11 +14,11 @@ export function ErrorState({
     <div
       role="alert"
       className={cn(
-        'flex flex-col items-center rounded-card border border-danger-500/25 bg-danger-500/5 px-6 py-10 text-center',
+        'flex flex-col items-center rounded-2xl border border-danger-500/25 bg-danger-500/5 px-6 py-10 text-center',
         className,
       )}
     >
-      <span className="inline-flex size-12 items-center justify-center rounded-xl bg-danger-500/10 text-danger-400 ring-1 ring-danger-500/20">
+      <span className="inline-flex size-12 items-center justify-center rounded-2xl bg-danger-500/10 text-danger-400 ring-1 ring-danger-500/20">
         <Icon className="size-6" aria-hidden="true" />
       </span>
       <h3 className="mt-4 text-base font-semibold text-ink">{title}</h3>

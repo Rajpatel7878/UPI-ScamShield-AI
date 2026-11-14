@@ -2,18 +2,18 @@ import { Loader2 } from 'lucide-react'
 import { cn } from '../../utils/cn.js'
 
 const BASE =
-  'inline-flex select-none items-center justify-center whitespace-nowrap rounded-lg font-medium transition-colors duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-400 disabled:pointer-events-none disabled:opacity-50'
+  'inline-flex select-none items-center justify-center whitespace-nowrap rounded-xl font-medium transition-all duration-300 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-400 disabled:pointer-events-none disabled:opacity-50'
 
 const VARIANTS = {
   primary:
-    'bg-brand-500 text-navy-950 shadow-lg shadow-brand-500/20 hover:bg-brand-400 active:bg-brand-600',
+    'bg-brand-500 text-navy-950 shadow-lg shadow-brand-500/25 hover:bg-brand-400 hover:shadow-brand-500/35 active:bg-brand-600',
   secondary:
-    'border border-navy-700 bg-navy-800 text-ink hover:border-brand-500/40 hover:bg-navy-700',
+    'border border-white/10 bg-white/[0.03] text-ink hover:border-brand-500/40 hover:bg-white/[0.06]',
   outline:
-    'border border-brand-500/40 bg-transparent text-brand-300 hover:border-brand-400 hover:bg-brand-500/10',
+    'border border-brand-500/40 bg-transparent text-brand-300 hover:border-brand-500/60 hover:bg-brand-500/10',
   danger:
-    'bg-danger-500 text-white shadow-lg shadow-danger-500/20 hover:bg-danger-400 active:bg-danger-500',
-  ghost: 'bg-transparent text-muted hover:bg-white/5 hover:text-ink',
+    'bg-danger-500 text-white shadow-lg shadow-danger-500/25 hover:bg-danger-400 hover:shadow-danger-500/35 active:bg-danger-600',
+  ghost: 'bg-transparent text-slate-400 hover:bg-white/5 hover:text-ink',
 }
 
 const SIZES = {

@@ -1,6 +1,6 @@
 """SQLAlchemy base class for all ORM models."""
 
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import declarative_base
 
 # Base class for all database models
 Base = declarative_base()

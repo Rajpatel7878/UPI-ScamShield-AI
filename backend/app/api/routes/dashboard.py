@@ -5,10 +5,11 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_current_user, get_db_session
+from app.core.time_utils import utc_iso
 from app.models.scan import Scan
 from app.models.user import User
 from app.schemas.history import AnalyticsOverviewResponse, DashboardStatsResponse
@@ -32,6 +33,33 @@ def _period_start(days: Optional[int]) -> Optional[datetime]:
     if days is None:
         return None
     return datetime.now(timezone.utc) - timedelta(days=days)
+
+
+def _scan_day_expression(session: Any) -> Any:
+    """Return a SQL expression to extract the date from Scan.created_at.
+
+    For PostgreSQL, wraps created_at with timezone('UTC', ...) then date().
+    For SQLite, uses date() directly since SQLite stores datetime without timezone.
+    """
+    from sqlalchemy.dialects import postgresql, sqlite
+
+    created = None  # will be set via SQL expression
+    # We construct a column expression that references Scan.created_at
+    # The session isn't used directly to get the model, but we need the column
+    # This function is tested by compiling the expression against a dialect
+    from app.models.scan import Scan
+    col = Scan.created_at
+
+    dialect = session.get_bind().dialect
+    if isinstance(dialect, postgresql.dialect):
+        # PostgreSQL: wrap with timezone then extract date
+        return func.date(func.timezone("UTC", col))
+    elif isinstance(dialect, sqlite.dialect):
+        # SQLite: date() works directly on the column
+        return func.date(col)
+    else:
+        # Fallback: try timezone-aware then date
+        return func.date(func.timezone("UTC", col))
 
 
 def _compute_stats(db: Session, user_id: int, days: Optional[int] = None) -> dict[str, Any]:
@@ -117,7 +145,7 @@ def _compute_stats(db: Session, user_id: int, days: Optional[int] = None) -> dic
             "risk_level": s.risk_level,
             "category": s.category,
             "summary": s.summary,
-            "created_at": s.created_at.isoformat() if s.created_at else None,
+            "created_at": utc_iso(s.created_at),
         }
         for s in scans[:5]
     ]

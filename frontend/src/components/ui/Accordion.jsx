@@ -17,7 +17,7 @@ export function AccordionItem({
   return (
     <div
       className={cn(
-        'overflow-hidden rounded-xl border border-white/8 bg-navy-800',
+        'overflow-hidden rounded-2xl border border-white/8 bg-white/[0.02]',
         isOpen && 'border-brand-500/30',
         className,
       )}
@@ -29,7 +29,7 @@ export function AccordionItem({
           aria-expanded={isOpen}
           aria-controls={panelId}
           onClick={() => onToggle?.(id)}
-          className="flex w-full items-center justify-between gap-4 px-4 py-4 text-left transition-colors hover:bg-white/[0.03] sm:px-5"
+          className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left transition-colors hover:bg-white/[0.03] sm:px-6"
         >
           <span className="min-w-0">
             <span className="block text-sm font-medium text-ink">{title}</span>
@@ -37,7 +37,7 @@ export function AccordionItem({
           </span>
           <ChevronDown
             className={cn(
-              'size-4 shrink-0 text-slate-400 transition-transform duration-200',
+              'size-4 shrink-0 text-slate-500 transition-transform duration-200',
               isOpen && 'rotate-180 text-brand-300',
             )}
             aria-hidden="true"
@@ -50,7 +50,7 @@ export function AccordionItem({
           id={panelId}
           role="region"
           aria-labelledby={buttonId}
-          className="animate-fade-in border-t border-white/5 px-4 py-4 sm:px-5"
+          className="animate-fade-in border-t border-white/5 px-5 py-4 sm:px-6"
         >
           {children}
         </div>

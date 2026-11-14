@@ -1,35 +1,39 @@
-import { Lightbulb, ScanLine, Send } from 'lucide-react'
-import { Container } from '../common/Container.jsx'
-import { SectionHeader } from '../common/SectionHeader.jsx'
+import { Lightbulb, ScanLine, Send } from 'lucide-react';
+import { Container } from '../common/Container.jsx';
+import { SectionHeader } from '../common/SectionHeader.jsx';
 
 const STEPS = [
   {
     icon: Send,
     title: 'Submit',
     description:
-      'Paste a suspicious SMS, WhatsApp message, payment request, or URL.',
+      'Paste a suspicious SMS, WhatsApp message, payment request, or URL into the scanner.',
   },
   {
     icon: ScanLine,
     title: 'Analyze',
     description:
-      'The system checks suspicious patterns and uses AI-assisted contextual analysis.',
+      'Rule-based detection (60%) combines with AI analysis (40%) via OpenRouter or Gemini for a hybrid risk score.',
   },
   {
     icon: Lightbulb,
     title: 'Understand',
     description:
-      'Review the risk assessment, warning indicators, and recommended next steps.',
+      'Review the risk category, detection indicators, and recommended safety actions before you respond.',
   },
-]
+];
 
 export function HowItWorks() {
   return (
     <section
       id="how-it-works"
       aria-labelledby="how-it-works-title"
-      className="scroll-mt-24 border-y border-white/5 bg-navy-900/30 py-16 sm:py-20 lg:py-24"
+      className="scroll-mt-24 border-y border-white/5 bg-navy-900/20 py-16 sm:py-20 lg:py-28 relative overflow-hidden"
     >
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 bg-gradient-to-tr from-red-500/5 via-blue-500/5 to-magenta-500/5"
+      />
       <Container size="xl">
         <SectionHeader
           id="how-it-works-title"
@@ -39,19 +43,19 @@ export function HowItWorks() {
           align="center"
         />
 
-        <ol className="mt-12 grid gap-8 lg:grid-cols-3 lg:gap-8">
+        <ol className="mt-16 relative grid gap-12 lg:grid-cols-3 lg:gap-12">
           {STEPS.map(({ icon: Icon, title, description }, index) => (
-            <li key={title} className="relative">
-              <div className="flex items-start gap-4 lg:block">
-                <span className="relative z-10 inline-flex size-12 shrink-0 items-center justify-center rounded-full border border-brand-500/30 bg-navy-900 font-mono text-sm font-semibold text-brand-300 shadow-[0_0_24px_-8px_rgba(20,184,166,0.6)]">
+            <li key={title} className="relative group">
+              <div className="flex flex-col lg:flex-row items-start gap-4 lg:items-center">
+                <div className="relative z-10 inline-flex size-12 shrink-0 items-center justify-center rounded-full border border-white/10 bg-navy-800 font-mono text-sm font-semibold text-ink shadow-glow-red group-hover:ring-2 group-hover:ring-red-500/30 transition-all duration-300">
                   {String(index + 1).padStart(2, '0')}
-                </span>
-                <div className="min-w-0 lg:mt-5">
-                  <div className="flex items-center gap-2">
-                    <Icon className="size-4 text-brand-300" aria-hidden="true" />
+                </div>
+                <div className="min-w-0 lg:mt-4 lg:text-left">
+                  <div className="flex items-center gap-2.5">
+                    <Icon className="size-4 text-red-300 group-hover:text-red-400 transition-colors" aria-hidden="true" />
                     <h3 className="type-h3">{title}</h3>
                   </div>
-                  <p className="type-body mt-2 max-w-sm text-muted">
+                  <p className="type-body mt-2 max-w-sm text-slate-400">
                     {description}
                   </p>
                 </div>
@@ -60,13 +64,7 @@ export function HowItWorks() {
               {index < STEPS.length - 1 && (
                 <span
                   aria-hidden="true"
-                  className="absolute left-6 top-14 -bottom-6 w-px bg-linear-to-b from-brand-500/30 to-white/5 lg:hidden"
-                />
-              )}
-              {index < STEPS.length - 1 && (
-                <span
-                  aria-hidden="true"
-                  className="absolute left-14 top-6 hidden h-px w-[calc(100%-1rem)] bg-linear-to-r from-brand-500/40 via-brand-500/20 to-white/5 lg:block"
+                  className="hidden lg:block absolute -top-3 left-1/2 -translate-x-1/2 h-[calc(100%+6px)] w-px bg-gradient-to-b from-red-500/20 to-transparent"
                 />
               )}
             </li>
@@ -74,5 +72,5 @@ export function HowItWorks() {
         </ol>
       </Container>
     </section>
-  )
+  );
 }

@@ -53,10 +53,6 @@ export function InputField({
   )
 }
 
-/**
- * Controlled search field. `onChange` receives the next value (not an event)
- * so clearing the input is always possible and consistent.
- */
 export function SearchInput({
   label = 'Search',
   value = '',

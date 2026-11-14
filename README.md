@@ -194,6 +194,8 @@ UPI-ScamShield-AI/
 │   └── package.json
 │
 ├── docs/
+│   ├── ANDROID_IMPLEMENTATION_PLAN.md
+│   ├── ANDROID_DEVICE_AUTH.md
 │   ├── PRE_DEPLOYMENT_AUDIT.md
 │   └── FINAL_PRE_DEPLOYMENT_AUDIT_REPORT.md
 │
@@ -248,6 +250,14 @@ OPENROUTER_TIMEOUT_SECONDS=30
 OPENROUTER_MAX_RETRIES=2
 
 GEMINI_API_KEY=your_gemini_api_key
+```
+
+Android device credentials (see [`docs/ANDROID_DEVICE_AUTH.md`](docs/ANDROID_DEVICE_AUTH.md)):
+
+```env
+# Lifetime of a device token, and how many live devices one user may have.
+DEVICE_TOKEN_EXPIRE_DAYS=90
+MAX_ACTIVE_DEVICES_PER_USER=5
 ```
 
 Keep all API keys private. Never commit `.env` to GitHub.

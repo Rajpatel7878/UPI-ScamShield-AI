@@ -10,7 +10,7 @@ function CollapsedTooltip({ children }) {
   return (
     <span
       aria-hidden="true"
-      className="pointer-events-none absolute left-full top-1/2 z-50 ml-3 -translate-y-1/2 whitespace-nowrap rounded-md border border-navy-700 bg-navy-800 px-2.5 py-1.5 text-xs font-medium text-ink opacity-0 shadow-lift transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100"
+      className="pointer-events-none absolute left-full top-1/2 z-50 ml-3 -translate-y-1/2 whitespace-nowrap rounded-xl border border-white/10 bg-navy-800/90 px-2.5 py-1.5 text-xs font-medium text-ink shadow-glow-red backdrop-blur opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100"
     >
       {children}
     </span>
@@ -47,7 +47,7 @@ export function SidebarContent({
             type="button"
             aria-label="Close navigation"
             onClick={onClose}
-            className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg text-slate-400 transition-colors duration-200 hover:bg-white/5 hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-400"
+            className="inline-flex size-9 shrink-0 items-center justify-center rounded-xl text-slate-400 transition-colors duration-200 hover:bg-white/5 hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-400"
           >
             <X className="size-5" aria-hidden="true" />
           </button>
@@ -73,10 +73,10 @@ export function SidebarContent({
                 onClick={onNavigate}
                 className={({ isActive }) =>
                   cn(
-                    'group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-400',
+                    'group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-300 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-400',
                     collapsed && 'justify-center px-2',
                     isActive
-                      ? 'bg-brand-500/10 text-brand-300'
+                      ? 'bg-red-500/10 text-red-300 neon-border-red shadow-glow-red'
                       : 'text-slate-400 hover:bg-white/5 hover:text-ink',
                   )
                 }
@@ -86,7 +86,7 @@ export function SidebarContent({
                     {isActive && (
                       <span
                         aria-hidden="true"
-                        className="absolute inset-y-2 left-0 w-0.5 rounded-full bg-brand-400"
+                        className="absolute inset-y-2 left-0 w-0.5 rounded-full bg-red-400"
                       />
                     )}
                     <Icon className="size-5 shrink-0" aria-hidden="true" />
@@ -106,7 +106,7 @@ export function SidebarContent({
         {isAuthenticated ? (
           <div
             className={cn(
-              'flex items-center gap-2 rounded-lg p-2',
+              'flex items-center gap-2 rounded-xl p-2',
               collapsed && 'justify-center',
             )}
           >
@@ -124,7 +124,7 @@ export function SidebarContent({
               onClick={logout}
               aria-label="Sign out"
               title="Sign out"
-              className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-white/5 hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-400"
+              className="inline-flex size-8 shrink-0 items-center justify-center rounded-xl text-slate-400 transition-colors hover:bg-white/5 hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-400"
             >
               <LogOut className="size-4" aria-hidden="true" />
             </button>
@@ -134,7 +134,7 @@ export function SidebarContent({
             to="/login"
             onClick={onNavigate}
             className={cn(
-              'group relative flex items-center gap-3 rounded-lg p-2 transition-colors duration-200 hover:bg-white/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-400',
+              'group relative flex items-center gap-3 rounded-xl p-2 transition-all duration-300 hover:bg-white/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-400',
               collapsed && 'justify-center',
             )}
           >
@@ -161,7 +161,7 @@ export function Sidebar({ collapsed }) {
       id="app-sidebar"
       aria-label="Application sidebar"
       className={cn(
-        'sticky top-0 hidden h-screen shrink-0 flex-col border-r border-white/5 bg-navy-950/70 backdrop-blur lg:flex',
+        'sticky top-0 hidden h-screen shrink-0 flex-col border-r border-white/5 bg-navy-950/80 backdrop-blur-2xl lg:flex',
         collapsed ? 'w-20' : 'w-64',
       )}
     >

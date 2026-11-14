@@ -1,0 +1,86 @@
+/**
+ * Design tokens for UPI ScamShield AI — Vaultra-inspired premium redesign.
+ *
+ * Visual direction: deep cinematic black, glassmorphism, soft neon borders,
+ * glowing red / electric blue / magenta accents, Inter Display headings,
+ * Poppins body & navigation.
+ *
+ * This is the single source of truth for the visual language. Tailwind reads
+ * these @theme values and generates utilities such as `bg-navy-800`,
+ * `text-brand-300`, `shadow-card` and `rounded-card`. Because @theme variables
+ * are emitted on :root, plain CSS can use `var(--color-brand-500)` too.
+ */
+
+/* Existing component color references (brand, navy, success, warning, danger)
+   are re-mapped here to the new Vaultra palette so every component inherits
+   the new visual identity without changing component code. */
+@theme {
+  /* Typography */
+  --font-sans:
+    var(--font-poppins), ui-sans-serif, system-ui, -apple-system, 'Segoe UI',
+    Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-display:
+    var(--font-inter), ui-sans-serif, system-ui, -apple-system, 'Segoe UI',
+    Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono:
+    ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas,
+    'Liberation Mono', monospace;
+
+  /* Surfaces — deep cinematic black */
+  --color-navy-950: #050507; /* page background */
+  --color-navy-900: #0a0a10; /* secondary background */
+  --color-navy-800: #121218; /* card / glass surface */
+  --color-navy-700: #1a1a24; /* borders, hover surfaces */
+  --color-navy-600: #242430; /* strong borders, scrollbar */
+
+  /* Brand — primary red (security / fraud protection) */
+  --color-brand-500: #ff365d;
+  --color-brand-400: #ff5a77;
+  --color-brand-300: #ff8096;
+  --color-brand-600: #e60d36;
+  --color-brand-700: #b3092c;
+
+  /* Accent accents — electric blue & magenta */
+  --color-blue-500: #4285ff;
+  --color-blue-400: #6b9cff;
+  --color-blue-300: #93b3ff;
+  --color-magenta-500: #d946ef;
+  --color-magenta-400: #e067f1;
+  --color-purple-500: #8b5cf6;
+  --color-purple-400: #a78bfa;
+
+  /* Semantic feedback */
+  --color-success-400: #34d399;
+  --color-success-500: #22c55e;
+  --color-warning-400: #fbbf24;
+  --color-warning-500: #f59e0b;
+  --color-danger-400: #f87171;
+  --color-danger-500: #ef4444;
+  --color-critical-500: #ef4444;
+
+  /* Text */
+  --color-ink: #ffffff; /* primary text */
+  --color-muted: #a1a1aa; /* secondary text */
+
+  /* Radii */
+  --radius-card: 0.75rem;
+  --radius-field: 0.5rem;
+  --radius-pill: 9999px;
+
+  /* Elevation */
+  --shadow-card:
+    0 1px 3px rgb(0 0 0 / 0.5), 0 8px 24px -8px rgb(0 0 0 / 0.6);
+  --shadow-lift:
+    0 2px 6px rgb(0 0 0 / 0.4), 0 20px 40px -20px rgb(0 0 0 / 0.8);
+  --shadow-glow-red:
+    0 0 30px rgb(255 54 93 / 0.25), 0 0 60px rgb(255 54 93 / 0.12);
+  --shadow-glow-blue:
+    0 0 30px rgb(66 133 255 / 0.25), 0 0 60px rgb(66 133 255 / 0.12);
+  --shadow-glow-magenta:
+    0 0 30px rgb(217 70 239 / 0.25), 0 0 60px rgb(217 70 239 / 0.12);
+
+  /* Motion */
+  --ease-soft: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --duration-entrance: 1.6s;
+}

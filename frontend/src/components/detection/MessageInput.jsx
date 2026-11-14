@@ -33,13 +33,14 @@ export function MessageInput({
   onChange,
   onClear,
   disabled = false,
+  placeholder: placeholderOverride,
 }) {
   const handleClear = () => {
     onClear()
   }
 
   const limits = LIMITS[contentType]
-  const placeholder = PLACEHOLDERS[contentType]
+  const placeholder = placeholderOverride || PLACEHOLDERS[contentType]
   const label = LABELS[contentType]
 
   const remaining = limits ? limits.max - value.length : null

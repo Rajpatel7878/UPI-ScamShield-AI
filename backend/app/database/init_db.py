@@ -23,7 +23,7 @@ import app.models  # noqa: F401  (imported for its side effect)
 
 logger = logging.getLogger(__name__)
 
-REQUIRED_TABLES = ("users", "scans")
+REQUIRED_TABLES = ("users", "scans", "devices")
 
 
 def table_exists(engine: Engine, table_name: str) -> bool:

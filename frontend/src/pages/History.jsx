@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom'
 import { BaseCard, Button, EmptyState, StatusBadge } from '../components/ui/index.js'
 import { useAuth } from '../context/AppContext.jsx'
 import { createApiClient } from '../services/apiClient.js'
+import { GlassCard } from '../components/ui/index.js'
 
 const RISK_LEVELS = ['', 'Low', 'Medium', 'High', 'Critical']
 const CONTENT_TYPES = ['', 'sms', 'whatsapp', 'payment_request', 'url', 'general']
@@ -64,96 +65,105 @@ function ScanDetailModal({ scan, onClose }) {
   if (!scan) return null
   const indicators = Array.isArray(scan.indicators) ? scan.indicators : []
   const recommendations = Array.isArray(scan.recommendations) ? scan.recommendations : []
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-labelledby="scan-detail-title" ref={dialogRef}>
-      <div className="max-h-[90vh] w-full max-w-3xl overflow-auto rounded-xl border border-white/10 bg-slate-950 p-5 shadow-xl">
-        <div className="mb-4 flex items-start justify-between gap-3">
+      <div className="max-h-[90vh] w-full max-w-3xl overflow-auto rounded-[2rem] border border-white/10 bg-white/5 p-6 shadow-glow-red glass-strong">
+        <div className="mb-6 flex items-start justify-between gap-3">
           <div>
-            <p className="type-label">Scan details</p>
-            <h3 id="scan-detail-title" className="type-h3 mt-1">Scan #{scan.id}</h3>
-            <p className="text-sm text-slate-400 mt-1">{formatDate(scan.created_at)}</p>
+            <p className="type-label text-slate-400">Scan details</p>
+            <h3 id="scan-detail-title" className="type-h2 mt-1 font-display">Scan #{scan.id}</h3>
+            <p className="text-sm text-slate-500 mt-1">{formatDate(scan.created_at)}</p>
           </div>
           <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close details">
             <X className="size-4" />
           </Button>
         </div>
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 mb-4">
-          <div className="rounded-lg border border-white/10 p-3">
-            <p className="text-xs text-slate-400">Risk score</p>
-            <p className="text-lg font-semibold">{scan.risk_score ?? 'N/A'}/100</p>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 mb-6">
+          <div className="rounded-xl border border-white/8 bg-white/[0.02] p-4">
+            <p className="text-xs font-medium text-slate-500 uppercase tracking-[0.14em]">Risk score</p>
+            <p className="type-stat mt-1">{scan.risk_score ?? 'N/A'}</p>
+            <p className="type-caption mt-1 text-slate-500">out of 100</p>
           </div>
-          <div className="rounded-lg border border-white/10 p-3">
-            <p className="text-xs text-slate-400">Risk level</p>
-            <div className="mt-1"><StatusBadge status={riskTone(scan.risk_level)}>{scan.risk_level || 'N/A'}</StatusBadge></div>
+          <div className="rounded-xl border border-white/8 bg-white/[0.02] p-4">
+            <p className="text-xs font-medium text-slate-500 uppercase tracking-[0.14em]">Risk level</p>
+            <div className="mt-2">
+              <StatusBadge status={riskTone(scan.risk_level)}>{scan.risk_level || 'N/A'}</StatusBadge>
+            </div>
           </div>
-          <div className="rounded-lg border border-white/10 p-3">
-            <p className="text-xs text-slate-400">Category</p>
-            <p className="font-medium">{scan.category || 'N/A'}</p>
+          <div className="rounded-xl border border-white/8 bg-white/[0.02] p-4">
+            <p className="text-xs font-medium text-slate-500 uppercase tracking-[0.14em]">Category</p>
+            <p className="mt-1 text-sm font-medium text-ink">{scan.category || 'N/A'}</p>
           </div>
-          <div className="rounded-lg border border-white/10 p-3">
-            <p className="text-xs text-slate-400">Content type</p>
-            <p className="font-medium">{scan.content_type || 'N/A'}</p>
+          <div className="rounded-xl border border-white/8 bg-white/[0.02] p-4">
+            <p className="text-xs font-medium text-slate-500 uppercase tracking-[0.14em]">Content type</p>
+            <p className="mt-1 text-sm font-medium text-ink">{scan.content_type || 'N/A'}</p>
           </div>
-          <div className="rounded-lg border border-white/10 p-3">
-            <p className="text-xs text-slate-400">Analysis type</p>
-            <p className="font-medium">{scan.analysis_type || 'N/A'}</p>
+          <div className="rounded-xl border border-white/8 bg-white/[0.02] p-4">
+            <p className="text-xs font-medium text-slate-500 uppercase tracking-[0.14em]">Analysis type</p>
+            <p className="mt-1 text-sm font-medium text-ink">{scan.analysis_type || 'N/A'}</p>
           </div>
-          <div className="rounded-lg border border-white/10 p-3">
-            <p className="text-xs text-slate-400">Scan timestamp</p>
-            <p className="font-medium">{formatDate(scan.created_at)}</p>
+          <div className="rounded-xl border border-white/8 bg-white/[0.02] p-4">
+            <p className="text-xs font-medium text-slate-500 uppercase tracking-[0.14em]">Scan timestamp</p>
+            <p className="mt-1 text-sm font-medium text-ink">{formatDate(scan.created_at)}</p>
           </div>
         </div>
 
-        <div className="space-y-4">
-          <div className="rounded-lg border border-white/10 p-3">
-            <p className="text-sm font-medium mb-1">Summary</p>
-            <p className="text-sm text-slate-300">{scan.summary || 'No summary available.'}</p>
+        <div className="space-y-5">
+          <div className="rounded-xl border border-white/8 bg-white/[0.02] p-5">
+            <p className="type-field-label text-slate-400 mb-2">Summary</p>
+            <p className="type-body text-slate-300">{scan.summary || 'No summary available.'}</p>
           </div>
 
-          <div className="rounded-lg border border-white/10 p-3">
-            <p className="text-sm font-medium mb-2">Analysis source statuses</p>
+          <div className="rounded-xl border border-white/8 bg-white/[0.02] p-5">
+            <p className="type-field-label text-slate-400 mb-3">Analysis source statuses</p>
             <div className="flex flex-wrap gap-2 text-sm">
-              <StatusBadge status={scan.rule_based_status === 'completed' ? 'success' : 'warning'}>Rule-based: {scan.rule_based_status || 'unknown'}</StatusBadge>
-              <StatusBadge status={scan.gemini_status === 'completed' ? 'success' : 'neutral'}>AI: {scan.gemini_status || 'unavailable'}</StatusBadge>
-              <StatusBadge status={scan.url_status === 'completed' ? 'success' : 'neutral'}>URL: {scan.url_status || 'not_applicable'}</StatusBadge>
+              <StatusBadge status={scan.rule_based_status === 'completed' ? 'success' : 'warning'}>{scan.rule_based_status || 'unknown'}</StatusBadge>
+              <StatusBadge status={scan.gemini_status === 'completed' ? 'success' : 'neutral'}>{scan.gemini_status || 'unavailable'}</StatusBadge>
+              <StatusBadge status={scan.url_status === 'completed' ? 'success' : 'neutral'}>{scan.url_status || 'not_applicable'}</StatusBadge>
             </div>
           </div>
 
-          <div className="rounded-lg border border-white/10 p-3">
-            <p className="text-sm font-medium mb-2">Detection indicators</p>
+          <div className="rounded-xl border border-white/8 bg-white/[0.02] p-5">
+            <p className="type-field-label text-slate-400 mb-3">Detection indicators</p>
             {indicators.length === 0 ? (
-              <p className="text-sm text-slate-400">No indicators recorded.</p>
+              <p className="text-sm text-slate-500">No indicators recorded.</p>
             ) : (
-              <ul className="space-y-2">
+              <ul className="space-y-3">
                 {indicators.map((ind, idx) => (
-                  <li key={idx} className="rounded border border-white/5 p-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-medium">{ind?.name || ind?.rule_id || 'Indicator'}</span>
+                  <li key={idx} className="rounded border border-white/5 p-3">
+                    <div className="flex flex-wrap items-center gap-2 mb-1">
+                      <span className="font-medium text-sm text-ink">{ind?.name || ind?.rule_id || 'Indicator'}</span>
                       {ind?.severity ? <StatusBadge status={riskTone(ind.severity)}>{String(ind.severity)}</StatusBadge> : null}
-                      {ind?.source ? <span className="text-xs text-slate-400">Source: {ind.source === 'gemini' || ind.source === 'openrouter' ? 'AI (heuristic/contextual)' : ind.source === 'rule_based' ? 'Rule-based' : String(ind.source)}</span> : null}
+                      {ind?.source ? <span className="type-caption text-slate-500">Source: {ind.source === 'gemini' || ind.source === 'openrouter' ? 'AI' : ind.source === 'rule_based' ? 'Rule-based' : String(ind.source)}</span> : null}
                     </div>
-                    <p className="text-sm text-slate-300 mt-1">{ind?.description || ind?.explanation || 'No explanation provided.'}</p>
+                    <p className="type-body-sm text-slate-400 mt-1">{ind?.description || ind?.explanation || 'No explanation provided.'}</p>
                   </li>
                 ))}
               </ul>
             )}
-            <p className="text-xs text-slate-500 mt-2">Heuristic findings should be treated as indicators, not verified proof of fraud.</p>
+            <p className="type-caption mt-2 text-slate-500">Heuristic findings should be treated as indicators, not verified proof of fraud.</p>
           </div>
 
-          <div className="rounded-lg border border-white/10 p-3">
-            <p className="text-sm font-medium mb-2">Recommendations</p>
+          <div className="rounded-xl border border-white/8 bg-white/[0.02] p-5">
+            <p className="type-field-label text-slate-400 mb-3">Recommendations</p>
             {recommendations.length === 0 ? (
-              <p className="text-sm text-slate-400">No recommendations recorded.</p>
+              <p className="text-sm text-slate-500">No recommendations recorded.</p>
             ) : (
-              <ul className="list-disc pl-5 space-y-1 text-sm text-slate-300">
-                {recommendations.map((rec, idx) => <li key={idx}>{String(rec)}</li>)}
+              <ul className="space-y-2">
+                {recommendations.map((rec, idx) => (
+                  <li key={idx} className="flex items-start gap-2 p-2 rounded-lg border border-white/5 bg-white/[0.02] text-sm text-slate-300">
+                    <ArrowRight className="mt-0.5 size-3.5 shrink-0 text-slate-500" aria-hidden="true" />
+                    <span>{String(rec)}</span>
+                  </li>
+                ))}
               </ul>
             )}
           </div>
         </div>
 
-        <div className="mt-4 flex justify-end">
+        <div className="mt-6 flex justify-end">
           <Button variant="secondary" onClick={onClose}>Back to history</Button>
         </div>
       </div>
@@ -173,7 +183,6 @@ export default function HistoryPage() {
   const [selectedScan, setSelectedScan] = useState(null)
   const [detailLoading, setDetailLoading] = useState(false)
 
-  // filters
   const [page, setPage] = useState(1)
   const [limit, setLimit] = useState(10)
   const [riskLevel, setRiskLevel] = useState('')
@@ -245,157 +254,179 @@ export default function HistoryPage() {
   const hasFilters = !!(riskLevel || contentType || category || startDate || endDate || search)
 
   return (
-    <div className="space-y-4 p-4 sm:p-6">
-      <BaseCard>
-        <div className="flex flex-wrap items-start justify-between gap-3">
+    <div className="relative p-4 sm:p-6">
+      <GlassCard className="mb-6 neon-border-red">
+        <div className="flex flex-wrap items-start justify-between gap-4 p-6">
           <div>
-            <p className="type-label">Scan records</p>
-            <h2 className="type-h2 mt-1">Scan History</h2>
-            <p className="text-sm text-slate-400 mt-1">Review previous analyses and investigate saved results.</p>
+            <p className="type-label text-slate-400">Scan records</p>
+            <h2 className="type-h2 mt-1 font-display">Scan History</h2>
+            <p className="type-caption mt-1 text-slate-500">Review previous analyses and investigate saved results.</p>
           </div>
-          <div className="flex gap-2">
-            <Button variant="secondary" size="sm" onClick={fetchHistory} leftIcon={<RefreshCw className="size-4" />}>Refresh</Button>
+          <div className="flex gap-3">
+            <Button variant="secondary" size="sm" onClick={fetchHistory} leftIcon={<RefreshCw className="size-4" />}>
+              Refresh
+            </Button>
             <Button variant="danger" size="sm" onClick={clearHistory} leftIcon={<Trash2 className="size-4" />} disabled={loading || (overview.total_scans || 0) === 0}>
               Clear history
             </Button>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 mt-4">
-          <div className="rounded-lg border border-white/10 p-3"><p className="text-xs text-slate-400">Total scans</p><p className="text-xl font-semibold">{overview.total_scans ?? 0}</p></div>
-          <div className="rounded-lg border border-white/10 p-3"><p className="text-xs text-slate-400">Suspicious scans</p><p className="text-xl font-semibold">{overview.suspicious_scans ?? 0}</p></div>
-          <div className="rounded-lg border border-white/10 p-3"><p className="text-xs text-slate-400">Critical scans</p><p className="text-xl font-semibold">{overview.critical_scans ?? 0}</p></div>
-          <div className="rounded-lg border border-white/10 p-3"><p className="text-xs text-slate-400">Most recent scan</p><p className="text-sm font-medium">{overview.most_recent_scan_date ? formatDate(overview.most_recent_scan_date) : 'N/A'}</p></div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mt-6 p-6">
+          <div className="rounded-xl border border-white/8 bg-white/[0.02] p-4">
+            <p className="text-xs font-medium text-slate-500 uppercase tracking-[0.14em]">Total scans</p>
+            <p className="type-stat mt-1">{overview.total_scans ?? 0}</p>
+          </div>
+          <div className="rounded-xl border border-white/8 bg-white/[0.02] p-4">
+            <p className="text-xs font-medium text-slate-500 uppercase tracking-[0.14em]">Suspicious scans</p>
+            <p className="type-stat mt-1 text-warning-500">{overview.suspicious_scans ?? 0}</p>
+          </div>
+          <div className="rounded-xl border border-white/8 bg-white/[0.02] p-4">
+            <p className="text-xs font-medium text-slate-500 uppercase tracking-[0.14em]">Critical scans</p>
+            <p className="type-stat mt-1 text-red-500">{overview.critical_scans ?? 0}</p>
+          </div>
+          <div className="rounded-xl border border-white/8 bg-white/[0.02] p-4">
+            <p className="text-xs font-medium text-slate-500 uppercase tracking-[0.14em]">Most recent scan</p>
+            <p className="type-body-sm mt-1 font-medium text-ink">{overview.most_recent_scan_date ? formatDate(overview.most_recent_scan_date) : 'N/A'}</p>
+          </div>
         </div>
-      </BaseCard>
+      </GlassCard>
 
-      <BaseCard>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
-          <label className="text-sm">
-            <span className="text-slate-400">Risk level</span>
-            <select className="mt-1 w-full rounded-md border border-white/10 bg-slate-900 p-2" value={riskLevel} onChange={(e) => { setPage(1); setRiskLevel(e.target.value) }}>
+      <GlassCard className="neon-border-blue">
+        <div className="p-6">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-4">
+            <label className="text-xs font-medium text-slate-400 uppercase tracking-[0.14em] block mb-2">
+              Risk level
+            </label>
+            <select className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-300 focus:border-red-500/50 focus:ring-1 focus:ring-red-500/20" value={riskLevel} onChange={(e) => { setPage(1); setRiskLevel(e.target.value) }}>
               {RISK_LEVELS.map((v) => <option key={v || 'all'} value={v}>{v || 'All'}</option>)}
             </select>
-          </label>
-          <label className="text-sm">
-            <span className="text-slate-400">Content type</span>
-            <select className="mt-1 w-full rounded-md border border-white/10 bg-slate-900 p-2" value={contentType} onChange={(e) => { setPage(1); setContentType(e.target.value) }}>
+
+            <label className="text-xs font-medium text-slate-400 uppercase tracking-[0.14em] block mb-2">
+              Content type
+            </label>
+            <select className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-300 focus:border-red-500/50 focus:ring-1 focus:ring-red-500/20" value={contentType} onChange={(e) => { setPage(1); setContentType(e.target.value) }}>
               {CONTENT_TYPES.map((v) => <option key={v || 'all'} value={v}>{v || 'All'}</option>)}
             </select>
-          </label>
-          <label className="text-sm">
-            <span className="text-slate-400">Category</span>
-            <input className="mt-1 w-full rounded-md border border-white/10 bg-slate-900 p-2" value={category} onChange={(e) => { setPage(1); setCategory(e.target.value) }} placeholder="e.g. Credential Theft" />
-          </label>
-          <label className="text-sm">
-            <span className="text-slate-400">Sort</span>
-            <select className="mt-1 w-full rounded-md border border-white/10 bg-slate-900 p-2" value={sort} onChange={(e) => { setPage(1); setSort(e.target.value) }}>
+
+            <label className="text-xs font-medium text-slate-400 uppercase tracking-[0.14em] block mb-2">
+              Category
+            </label>
+            <input className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-300 focus:border-red-500/50 focus:ring-1 focus:ring-red-500/20" value={category} onChange={(e) => { setPage(1); setCategory(e.target.value) }} placeholder="e.g. Credential Theft" />
+
+            <label className="text-xs font-medium text-slate-400 uppercase tracking-[0.14em] block mb-2">
+              Sort
+            </label>
+            <select className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-300 focus:border-red-500/50 focus:ring-1 focus:ring-red-500/20" value={sort} onChange={(e) => { setPage(1); setSort(e.target.value) }}>
               {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
-          </label>
-          <label className="text-sm">
-            <span className="text-slate-400">Start date</span>
-            <input type="date" className="mt-1 w-full rounded-md border border-white/10 bg-slate-900 p-2" value={startDate} onChange={(e) => { setPage(1); setStartDate(e.target.value) }} />
-          </label>
-          <label className="text-sm">
-            <span className="text-slate-400">End date</span>
-            <input type="date" className="mt-1 w-full rounded-md border border-white/10 bg-slate-900 p-2" value={endDate} onChange={(e) => { setPage(1); setEndDate(e.target.value) }} />
-          </label>
-          <label className="text-sm md:col-span-2">
-            <span className="text-slate-400">Search (safe metadata)</span>
-            <div className="mt-1 flex gap-2">
-              <input className="w-full rounded-md border border-white/10 bg-slate-900 p-2" value={searchInput} onChange={(e) => setSearchInput(e.target.value)} placeholder="Category, summary, risk level, type..." />
+
+            <label className="text-xs font-medium text-slate-400 uppercase tracking-[0.14em] block mb-2">
+              Start date
+            </label>
+            <input type="date" className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-300 focus:border-red-500/50 focus:ring-1 focus:ring-red-500/20" value={startDate} onChange={(e) => { setPage(1); setStartDate(e.target.value) }} />
+
+            <label className="text-xs font-medium text-slate-400 uppercase tracking-[0.14em] block mb-2">
+              End date
+            </label>
+            <input type="date" className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-300 focus:border-red-500/50 focus:ring-1 focus:ring-red-500/20" value={endDate} onChange={(e) => { setPage(1); setEndDate(e.target.value) }} />
+
+            <label className="text-xs font-medium text-slate-400 uppercase tracking-[0.14em] block mb-2 lg:col-span-2">
+              Search (safe metadata)
+            </label>
+            <div className="mt-1 flex gap-2 lg:col-span-2">
+              <input className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-300 focus:border-red-500/50 focus:ring-1 focus:ring-red-500/20" value={searchInput} onChange={(e) => setSearchInput(e.target.value)} placeholder="Category, summary, risk level, type..." />
               <Button size="sm" onClick={() => { setPage(1); setSearch(searchInput) }}>Search</Button>
             </div>
-          </label>
-        </div>
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm text-slate-400">
-          <div>Page size:
-            <select className="ml-2 rounded-md border border-white/10 bg-slate-900 p-1" value={limit} onChange={(e) => { setPage(1); setLimit(Number(e.target.value)) }}>
-              {[10, 20, 50, 100].map((n) => <option key={n} value={n}>{n}</option>)}
-            </select>
           </div>
-          <div>{pagination.total || 0} total record(s)</div>
-        </div>
 
-        {loading ? (
-          <div className="mt-4 space-y-2 animate-pulse">
-            <div className="h-10 rounded bg-white/5" />
-            <div className="h-10 rounded bg-white/5" />
-            <div className="h-10 rounded bg-white/5" />
-            <div className="h-10 rounded bg-white/5" />
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm text-slate-500">
+            <div>Page size:
+              <select className="ml-2 rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-xs text-slate-300 focus:border-red-500/50" value={limit} onChange={(e) => { setPage(1); setLimit(Number(e.target.value)) }}>
+                {[10, 20, 50, 100].map((n) => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </div>
+            <div>{pagination.total || 0} total record(s)</div>
           </div>
-        ) : error ? (
-          <div className="mt-4 rounded-lg border border-red-500/30 bg-red-500/10 p-4">
-            <p className="text-red-300">{error}</p>
-            <Button className="mt-2" size="sm" variant="secondary" onClick={fetchHistory}>Retry</Button>
-          </div>
-        ) : items.length === 0 ? (
-          <div className="mt-4">
-            {hasFilters ? (
-              <EmptyState
-                icon={HistoryIcon}
-                title="No matching results"
-                description="No scans match the selected filters. Try adjusting or clearing filters."
-                action={<Button size="sm" variant="secondary" onClick={() => { setRiskLevel(''); setContentType(''); setCategory(''); setStartDate(''); setEndDate(''); setSearch(''); setSearchInput(''); setPage(1) }}>Clear filters</Button>}
-              />
-            ) : (
-              <EmptyState
-                icon={HistoryIcon}
-                title="No scans yet"
-                description="No detection results have been saved yet. Run your first analysis to see results here."
-                action={<Button as={Link} to="/detect" size="sm" rightIcon={<ArrowRight className="size-4" aria-hidden="true" />}>Open detection workspace</Button>}
-              />
-            )}
-          </div>
-        ) : (
-          <>
-            <div className="overflow-x-auto mt-4">
-              <table className="w-full border-collapse">
-                <thead>
-                  <tr className="border-b border-white/10 text-left text-xs text-slate-400">
-                    <th scope="col" className="p-3">Scan</th>
-                    <th scope="col" className="p-3">Content type</th>
-                    <th scope="col" className="p-3">Risk score</th>
-                    <th scope="col" className="p-3">Risk level</th>
-                    <th scope="col" className="p-3">Category</th>
-                    <th scope="col" className="p-3">Scan date</th>
-                    <th scope="col" className="p-3">Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((scan) => (
-                    <tr key={scan.id} className="border-b border-white/5 hover:bg-white/5">
-                      <td className="p-3 text-sm">{shortId(scan.id)}</td>
-                      <td className="p-3 text-sm">{scan.content_type || 'N/A'}</td>
-                      <td className="p-3 text-sm font-medium">{scan.risk_score ?? 'N/A'}</td>
-                      <td className="p-3 text-sm"><StatusBadge status={riskTone(scan.risk_level)}>{scan.risk_level || 'N/A'}</StatusBadge></td>
-                      <td className="p-3 text-sm">{scan.category || 'N/A'}</td>
-                      <td className="p-3 text-sm">{formatDate(scan.created_at)}</td>
-                      <td className="p-3">
-                        <Button size="sm" variant="secondary" onClick={() => openDetail(scan.id)} leftIcon={<Eye className="size-4" />}>
-                          View details
-                        </Button>
-                      </td>
+
+          {loading ? (
+            <div className="mt-6 space-y-3">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="h-10 rounded-xl bg-gradient-to-r from-white/5 via-white/10 to-white/5 animate-shimmer" />
+              ))}
+            </div>
+          ) : error ? (
+            <div className="mt-6 rounded-xl border border-red-500/30 bg-red-500/5 p-4">
+              <p className="text-red-300">{error}</p>
+              <Button className="mt-3" size="sm" variant="secondary" onClick={fetchHistory}>Retry</Button>
+            </div>
+          ) : items.length === 0 ? (
+            <div className="mt-6">
+              {hasFilters ? (
+                <EmptyState
+                  icon={HistoryIcon}
+                  title="No matching results"
+                  description="No scans match the selected filters. Try adjusting or clearing filters."
+                  action={<Button size="sm" variant="secondary" onClick={() => { setRiskLevel(''); setContentType(''); setCategory(''); setStartDate(''); setEndDate(''); setSearch(''); setSearchInput(''); setPage(1) }}>Clear filters</Button>}
+                />
+              ) : (
+                <EmptyState
+                  icon={HistoryIcon}
+                  title="No scans yet"
+                  description="No detection results have been saved yet. Run your first analysis to see results here."
+                  action={<Button as={Link} to="/detect" size="sm" rightIcon={<ArrowRight className="size-4" aria-hidden="true" />}>Open detection workspace</Button>}
+                />
+              )}
+            </div>
+          ) : (
+            <>
+              <div className="overflow-x-auto mt-6">
+                <table className="w-full border-collapse">
+                  <thead>
+                    <tr className="border-b border-white/8 text-left text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                      <th scope="col" className="p-4">Scan</th>
+                      <th scope="col" className="p-4">Content type</th>
+                      <th scope="col" className="p-4">Risk score</th>
+                      <th scope="col" className="p-4">Risk level</th>
+                      <th scope="col" className="p-4">Category</th>
+                      <th scope="col" className="p-4">Scan date</th>
+                      <th scope="col" className="p-4">Action</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-              <p className="text-sm text-slate-400">Page {pagination.page || page} of {pagination.total_pages || 0} • {pagination.total || 0} records</p>
-              <div className="flex items-center gap-2">
-                <Button size="sm" variant="secondary" disabled={(pagination.page || page) <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>Previous</Button>
-                <Button size="sm" variant="secondary" disabled={(pagination.total_pages || 0) === 0 || (pagination.page || page) >= (pagination.total_pages || 0)} onClick={() => setPage((p) => p + 1)}>Next</Button>
+                  </thead>
+                  <tbody>
+                    {items.map((scan) => (
+                      <tr key={scan.id} className="border-b border-white/5 hover:bg-white/5 transition-colors duration-200">
+                        <td className="p-4 text-sm">{shortId(scan.id)}</td>
+                        <td className="p-4 text-sm">{scan.content_type || 'N/A'}</td>
+                        <td className="p-4 text-sm font-medium text-ink">{scan.risk_score ?? 'N/A'}</td>
+                        <td className="p-4 text-sm"><StatusBadge status={riskTone(scan.risk_level)}>{scan.risk_level || 'N/A'}</StatusBadge></td>
+                        <td className="p-4 text-sm text-slate-300">{scan.category || 'N/A'}</td>
+                        <td className="p-4 text-sm text-slate-400">{formatDate(scan.created_at)}</td>
+                        <td className="p-4">
+                          <Button size="sm" variant="secondary" onClick={() => openDetail(scan.id)} leftIcon={<Eye className="size-4" />}>
+                            View details
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-            </div>
-          </>
-        )}
-      </BaseCard>
+
+              <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
+                <p className="type-caption">Page {pagination.page || page} of {pagination.total_pages || 0} • {pagination.total || 0} records</p>
+                <div className="flex items-center gap-2">
+                  <Button size="sm" variant="secondary" disabled={(pagination.page || page) <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>Previous</Button>
+                  <Button size="sm" variant="secondary" disabled={(pagination.total_pages || 0) === 0 || (pagination.page || page) >= (pagination.total_pages || 0)} onClick={() => setPage((p) => p + 1)}>Next</Button>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      </GlassCard>
 
       {detailLoading && !selectedScan ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"><div className="rounded bg-slate-900 p-4">Loading details…</div></div>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"><div className="rounded-xl bg-white/5 p-4">Loading details…</div></div>
       ) : null}
       <ScanDetailModal scan={selectedScan} onClose={() => setSelectedScan(null)} />
     </div>

@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     log_format: str = "text"
     log_level: str = "INFO"
     api_prefix: str = "/api/v1"
-    frontend_url: str = "http://localhost:5173"
+    frontend_url: str = "http://localhost:3000"
 
     # Comma-separated additional browser origins, e.g.
     # CORS_ORIGINS=https://app.example.com,https://staging.example.com
@@ -47,6 +47,22 @@ class Settings(BaseSettings):
         validation_alias="ACCESS_TOKEN_EXPIRE_MINUTES",
         ge=5,
         le=1440,
+    )
+
+    # Android device credentials. A device token is issued per installation and
+    # is separate from the user JWT; only its SHA-256 hash is stored. Expiry is
+    # configurable and every token can be revoked individually.
+    device_token_expire_days: int = Field(
+        default=90,
+        validation_alias="DEVICE_TOKEN_EXPIRE_DAYS",
+        ge=1,
+        le=3650,
+    )
+    max_active_devices_per_user: int = Field(
+        default=5,
+        validation_alias="MAX_ACTIVE_DEVICES_PER_USER",
+        ge=1,
+        le=100,
     )
 
     # Abuse protection (single-process, in-memory sliding windows). Documented
@@ -72,6 +88,10 @@ class Settings(BaseSettings):
     def cors_origins(self) -> list[str]:
         """Origins allowed to call this API from a browser."""
         origins = [self.frontend_url.rstrip("/")]
+        if not self.is_production:
+            # The Next.js dev server runs on 3000; the previous Vite app used
+            # 5173, which is kept so both can run during the transition.
+            origins.extend(["http://localhost:3000", "http://localhost:5173"])
         origins.extend(
             origin.strip().rstrip("/")
             for origin in self.cors_origins_raw.split(",")

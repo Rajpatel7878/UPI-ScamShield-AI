@@ -11,6 +11,7 @@ import {
   URLInput,
 } from '../components/detection/index.js'
 import { apiClient } from '../services/apiClient.js'
+import { GlassCard } from '../components/ui/index.js'
 
 const CONTENT_TYPE_MAP = {
   sms: 'sms',
@@ -63,8 +64,6 @@ export default function Detection() {
     setResult(null)
 
     try {
-      // AI-assisted analysis is bounded server-side to ~35 s, so the client
-      // waits longer than the default request timeout instead of failing early.
       const { data } = await apiClient.post(
         '/detect/analyze',
         {
@@ -86,89 +85,124 @@ export default function Detection() {
   }
 
   return (
-    <div className="space-y-5">
-      <div className="rounded-card border border-brand-500/20 bg-brand-500/5 p-4">
-        <p className="type-body-sm flex items-start gap-2 text-slate-300">
-          <Info className="mt-0.5 size-4 shrink-0 text-brand-300" aria-hidden="true" />
-          <span>
-            Rule-based analysis runs on this server. URL analysis is passive and
-            never opens links. If an AI provider is configured (OpenRouter or
-            Google Gemini), the message text is also sent for analysis after OTP,
-            PIN, password, and card values are masked; otherwise only local
-            analysis is used.
-          </span>
-        </p>
-      </div>
+    <div className="relative">
+      <GlassCard
+        className="max-w-3xl mx-auto neon-border-red animate-fade-up entrance-1"
+        padding="xl"
+      >
+        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 mb-8">
+          <div>
+            <p className="type-label text-red-300 flex items-center gap-2">
+              <Info className="size-3.5" aria-hidden="true" />
+              Analyze suspicious content
+            </p>
+            <h1 className="type-h2 mt-1 font-display">Scam Scanner</h1>
+          </div>
+          <div className="flex items-end gap-3">
+            <p className="hidden sm:block type-caption text-slate-500">
+              Paste a message or URL to analyze it for fraud indicators.
+            </p>
+          </div>
+        </div>
 
-      <section aria-labelledby="content-type-heading">
-        <h2 id="content-type-heading" className="type-label mb-2">
-          Content type
-        </h2>
-        <ContentTypeSelector
-          selectedKey={contentType}
-          onSelect={handleContentTypeChange}
+        {/* Privacy notice */}
+        <PrivacyNotice />
+
+        {/* Content type selector */}
+        <section aria-labelledby="content-type-heading" className="mb-6">
+          <h2 id="content-type-heading" className="type-label mb-3">
+            Content type
+          </h2>
+          <ContentTypeSelector
+            selectedKey={contentType}
+            onSelect={handleContentTypeChange}
+          />
+        </section>
+
+        {/* Input area */}
+        <section aria-label="Content to analyze" className="mb-6">
+          {contentType === 'url' ? (
+            <URLInput
+              value={inputValue}
+              onChange={setInputValue}
+              onClear={() => setInputValue('')}
+              disabled={isAnalyzing}
+            />
+          ) : (
+            <MessageInput
+              contentType={contentType}
+              value={inputValue}
+              onChange={setInputValue}
+              onClear={() => setInputValue('')}
+              disabled={isAnalyzing}
+              placeholder="Paste a suspicious SMS, WhatsApp message, or UPI payment request here…"
+            />
+          )}
+        </section>
+
+        {/* Example messages */}
+        <ExampleMessages
+          contentType={contentType}
+          onInputChange={setInputValue}
+          onExampleSelect={() => {
+            setResult(null)
+            setError('')
+          }}
+          isLoading={isAnalyzing}
         />
-      </section>
 
-      <section aria-label="Content to analyze">
-        {contentType === 'url' ? (
-          <URLInput
-            value={inputValue}
-            onChange={setInputValue}
-            onClear={() => setInputValue('')}
-            disabled={isAnalyzing}
+        {/* Analyze button */}
+        <div className="mt-8">
+          <AnalyzeButton
+            isDisabled={!inputValue.trim()}
+            isLoading={isAnalyzing}
+            onClick={handleAnalyze}
+            className="w-full lg:w-auto"
           />
-        ) : (
-          <MessageInput
-            contentType={contentType}
-            value={inputValue}
-            onChange={setInputValue}
-            onClear={() => setInputValue('')}
-            disabled={isAnalyzing}
-          />
+        </div>
+
+        {/* Error */}
+        {error && (
+          <div
+            role="alert"
+            className="mt-6 flex items-start gap-3 rounded-xl border border-red-500/30 bg-red-500/5 p-4 neon-border-red"
+          >
+            <AlertTriangle
+              className="mt-0.5 size-4 shrink-0 text-red-400"
+              aria-hidden="true"
+            />
+            <p className="text-sm text-red-300">{error}</p>
+          </div>
         )}
-      </section>
 
-      <ExampleMessages
-        contentType={contentType}
-        onInputChange={setInputValue}
-        onExampleSelect={() => {
-          setResult(null)
-          setError('')
-        }}
-        isLoading={isAnalyzing}
-      />
+        {/* Analyzing state */}
+        {isAnalyzing && (
+          <div
+            role="status"
+            aria-live="polite"
+            className="mt-6 rounded-xl border border-white/10 bg-navy-800/50 p-6 glass"
+          >
+            <p className="type-body text-slate-300">
+              Analyzing message and links…
+            </p>
+            <div className="mt-4 h-1 w-full rounded-full bg-white/5 overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-red-500 via-blue-500 to-magenta-500 animate-[ds-shimmer_2s_linear_infinite]"
+                style={{ width: '70%' }}
+              />
+            </div>
+          </div>
+        )}
 
-      <PrivacyNotice />
-
-      <AnalyzeButton
-        isDisabled={!inputValue.trim()}
-        isLoading={isAnalyzing}
-        onClick={handleAnalyze}
-      />
-
-      {error && (
-        <div role="alert" className="flex items-start gap-2 rounded-lg border border-danger-500/30 bg-danger-500/10 p-4">
-          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-danger-400" aria-hidden="true" />
-          <p className="text-sm text-danger-400">{error}</p>
+        {/* Results */}
+        <div ref={resultRef} tabIndex={-1} className="outline-none mt-6">
+          <AnalysisResult
+            result={result}
+            hasResult={Boolean(result)}
+            onDismiss={() => setResult(null)}
+          />
         </div>
-      )}
-
-      {isAnalyzing && (
-        <div role="status" aria-live="polite" className="rounded-card border border-white/10 bg-navy-800 p-6">
-          <p className="type-body">Analyzing message and links…</p>
-          <div className="mt-3 h-2 w-2/3 animate-pulse rounded bg-white/10" />
-          <div className="mt-2 h-2 w-1/2 animate-pulse rounded bg-white/5" />
-        </div>
-      )}
-
-      <div ref={resultRef} tabIndex={-1} className="outline-none">
-        <AnalysisResult
-          result={result}
-          hasResult={Boolean(result)}
-          onDismiss={() => setResult(null)}
-        />
-      </div>
+      </GlassCard>
     </div>
   )
 }

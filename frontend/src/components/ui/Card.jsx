@@ -1,20 +1,21 @@
 import { cn } from '../../utils/cn.js'
 
-const CARD_BASE = 'rounded-card border border-white/8 bg-navy-800'
+const CARD_BASE = 'rounded-2xl border border-white/8 bg-white/[0.02] shadow-card'
 const CARD_PADDING = {
   none: '',
   sm: 'p-4',
   md: 'p-5 sm:p-6',
   lg: 'p-6 sm:p-8',
+  xl: 'p-8 sm:p-10',
 }
 const INTERACTIVE =
-  'transition duration-200 ease-[var(--ease-soft)] hover:-translate-y-0.5 hover:border-brand-500/40 hover:shadow-lift'
+  'transition-all duration-300 ease-[var(--ease-soft)] hover:-translate-y-1 hover:border-white/20 hover:shadow-glow-red'
 
 const TONES = {
-  brand: 'bg-brand-500/10 text-brand-300 ring-brand-500/20',
-  success: 'bg-success-500/10 text-success-400 ring-success-500/20',
-  warning: 'bg-warning-500/10 text-warning-400 ring-warning-500/20',
-  danger: 'bg-danger-500/10 text-danger-400 ring-danger-500/20',
+  brand: 'bg-brand-500/10 text-brand-300 ring-1 ring-brand-500/20',
+  success: 'bg-success-500/10 text-success-400 ring-1 ring-success-500/20',
+  warning: 'bg-warning-500/10 text-warning-400 ring-1 ring-warning-500/20',
+  danger: 'bg-danger-500/10 text-danger-400 ring-1 ring-danger-500/20',
 }
 
 export function BaseCard({
@@ -46,7 +47,22 @@ export function GlassCard({ className, padding = 'md', children, ...props }) {
     <BaseCard
       padding={padding}
       className={cn(
-        'border-white/10 bg-white/5 shadow-card backdrop-blur-sm',
+        'border-white/10 bg-white/[0.03] shadow-card backdrop-blur-xl',
+        className,
+      )}
+      {...props}
+    >
+      {children}
+    </BaseCard>
+  )
+}
+
+export function GlassCardStrong({ className, padding = 'md', children, ...props }) {
+  return (
+    <BaseCard
+      padding={padding}
+      className={cn(
+        'border-white/12 bg-white/[0.05] shadow-card backdrop-blur-2xl',
         className,
       )}
       {...props}
@@ -71,11 +87,11 @@ export function StatCard({
         {Icon && (
           <span
             className={cn(
-              'inline-flex size-8 shrink-0 items-center justify-center rounded-lg ring-1',
+              'inline-flex size-10 shrink-0 items-center justify-center rounded-2xl ring-1',
               TONES[tone],
             )}
           >
-            <Icon className="size-4" aria-hidden="true" />
+            <Icon className="size-5" aria-hidden="true" />
           </span>
         )}
       </div>
@@ -96,10 +112,10 @@ export function FeatureCard({
   return (
     <BaseCard
       interactive={interactive}
-      className={cn('flex h-full flex-col gap-3', className)}
+      className={cn('flex h-full flex-col gap-4', className)}
     >
       {Icon && (
-        <span className="inline-flex size-10 items-center justify-center rounded-xl bg-brand-500/10 text-brand-300 ring-1 ring-brand-500/20">
+        <span className="inline-flex size-12 shrink-0 items-center justify-center rounded-2xl bg-brand-500/10 text-brand-300 ring-1 ring-brand-500/20">
           <Icon className="size-5" aria-hidden="true" />
         </span>
       )}
@@ -121,16 +137,16 @@ export function InfoCard({ title, icon: Icon, tone = 'brand', className, childre
   return (
     <div
       className={cn(
-        'rounded-card border border-l-2 p-5',
+        'rounded-2xl border border-l-2 p-6',
         INFO_TONES[tone],
         className,
       )}
     >
-      <div className="flex items-center gap-2">
-        {Icon && <Icon className="size-4 shrink-0" aria-hidden="true" />}
+      <div className="flex items-center gap-3">
+        {Icon && <Icon className="size-5 shrink-0" aria-hidden="true" />}
         <h3 className="type-h3">{title}</h3>
       </div>
-      <div className="type-body mt-2 text-slate-300">{children}</div>
+      <div className="type-body mt-3 text-slate-300 leading-relaxed">{children}</div>
     </div>
   )
 }
