@@ -6,9 +6,8 @@ that recommendations are relevant to the matched indicators.
 """
 from __future__ import annotations
 
-from typing import Any
 
-from .rules import DetectionRule, get_all_rules, RULE_NAME_MAP, SCORE_CONTRIBUTION_MAP
+from .rules import get_all_rules
 
 
 class ExplanationService:

@@ -4,7 +4,6 @@ Normalizes whitespace and text case before analysis. Supports English and
 common Hinglish expressions. Does not modify the original submitted text.
 """
 import re
-from typing import Optional
 
 
 def normalize_text(content: str) -> str:

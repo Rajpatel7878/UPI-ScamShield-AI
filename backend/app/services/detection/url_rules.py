@@ -6,27 +6,8 @@ detection pattern, explanation, recommended safety action, and score contributio
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any, Callable, Optional
-import re
+from dataclasses import dataclass
 
-from .url_parser import (
-    EXCESSIVE_SUBDOMAIN_PATTERN,
-    CREDENTIAL_PATTERN,
-    IP_HOSTNAME_PATTERN,
-    SHORTENER_PATTERN,
-    LEGITIMATE_TLDS,
-    get_domain,
-    get_hostname,
-    has_embedded_credentials,
-    has_excessive_subdomains,
-    has_punycode,
-    has_suspicious_query,
-    has_unusual_port,
-    is_ip_based_hostname,
-    is_shortened_url,
-    normalize_url,
-)
 
 
 RULE_ID_COUNTER = 2000

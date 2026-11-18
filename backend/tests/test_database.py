@@ -15,7 +15,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import sessionmaker
 
-from app.database.connection import Base, engine, session_factory
+from app.database.base import Base
+from app.database.connection import engine, session_factory
 from app.models.user import User
 from app.models.scan import Scan
 

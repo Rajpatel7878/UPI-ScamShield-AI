@@ -5,7 +5,8 @@ schema creation (development) and Alembic autogenerate (migrations) rely on.
 """
 
 from app.models.device import Device
+from app.models.quick_scan_event import QuickScanEvent
 from app.models.scan import Scan
 from app.models.user import User
 
-__all__ = ["Device", "Scan", "User"]
+__all__ = ["Device", "QuickScanEvent", "Scan", "User"]

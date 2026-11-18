@@ -9,19 +9,12 @@ from __future__ import annotations
 
 import logging
 from typing import Any
-from typing import Dict
-from typing import List
 from typing import Optional
-from typing import Tuple
 
-from app.services.detection.gemini_service import GeminiService, is_gemini_configured
+from app.services.detection.gemini_service import GeminiService
 from app.services.detection.risk_scorer import RiskScorer
-from app.services.detection.rules import get_all_rules, RULE_NAME_MAP, SCORE_CONTRIBUTION_MAP
 from app.schemas.detection import (
     GeminiIndicator,
-    GeminiAnalysisResult,
-    AIAnalysis,
-    DetectionResponse,
 )
 
 

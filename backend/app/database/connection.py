@@ -6,7 +6,6 @@ import os
 from sqlalchemy import Engine, create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.database.base import Base
 
 logger = logging.getLogger(__name__)
 

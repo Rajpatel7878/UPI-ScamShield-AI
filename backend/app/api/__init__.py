@@ -12,12 +12,14 @@ from app.api.routes.dashboard import router as dashboard_router
 from app.api.routes.detect import router as detect_router
 from app.api.routes.devices import router as devices_router
 from app.api.routes.health_checks import router as health_checks_router
+from app.api.routes.quick_detection import router as quick_detection_router
 
 api_router = APIRouter()
 api_router.include_router(health_router)
 api_router.include_router(auth_router, prefix="/auth")
 api_router.include_router(devices_router, prefix="/devices")
 api_router.include_router(detect_router)
+api_router.include_router(quick_detection_router)
 api_router.include_router(dashboard_router)
 api_router.include_router(health_checks_router)
 

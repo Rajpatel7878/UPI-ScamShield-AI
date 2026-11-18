@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Debug-only configuration: plain HTTP is allowed so the app can talk to the host
+  backend through 10.0.2.2, a LAN address, or a local tunnel. The release build
+  uses the strict config in src/main and requires HTTPS.
+-->
+<network-security-config xmlns:tools="http://schemas.android.com/tools">
+    <!-- Debug-only: cleartext must stay allowed for 10.0.2.2, LAN hosts and tunnels.
+         The release config in src/main forbids cleartext, so this warning is expected here. -->
+    <base-config cleartextTrafficPermitted="true" tools:ignore="InsecureBaseConfiguration">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

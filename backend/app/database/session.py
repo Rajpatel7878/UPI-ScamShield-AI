@@ -4,7 +4,7 @@ from typing import Generator
 
 from sqlalchemy.orm import Session
 
-from app.database.connection import session_factory, get_session as get_session_gen
+from app.database.connection import get_session as get_session_gen
 
 
 def get_db_session() -> Generator[Session, None, None]:

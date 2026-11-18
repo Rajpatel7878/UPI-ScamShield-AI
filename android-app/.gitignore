@@ -1,0 +1,23 @@
+# Local machine configuration (SDK path and optional base URL). Never commit.
+local.properties
+
+# Gradle / build output
+.gradle/
+build/
+app/build/
+.kotlin/
+captures/
+.cxx/
+.externalNativeBuild/
+
+# IDE files
+.idea/
+*.iml
+
+# Signing material
+*.jks
+*.keystore
+
+# OS noise
+.DS_Store
+Thumbs.db

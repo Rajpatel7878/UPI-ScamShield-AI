@@ -18,11 +18,9 @@ integration and hybrid scoring can be added in later phases.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any, Callable, Optional
-import re
+from dataclasses import dataclass
+from typing import Callable, Optional
 
-from .text_normalizer import normalize_text, extract_urls, is_suspicious_shortened_url
 
 
 RULE_ID_COUNTER = 1000

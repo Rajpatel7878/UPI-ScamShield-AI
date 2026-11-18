@@ -65,6 +65,25 @@ class Settings(BaseSettings):
         le=100,
     )
 
+    # Android quick detection (Phase 2). AI assistance is only attempted for
+    # mid-range rule scores and is bounded so a notification check cannot hang.
+    store_quick_scans: bool = Field(
+        default=False,
+        validation_alias="STORE_QUICK_SCANS",
+    )
+    quick_scan_ai_timeout_seconds: float = Field(
+        default=4.5,
+        validation_alias="QUICK_SCAN_AI_TIMEOUT_SECONDS",
+        gt=0,
+        le=30,
+    )
+    rate_limit_quick_scan_per_minute: int = Field(
+        default=30,
+        validation_alias="RATE_LIMIT_QUICK_SCAN_PER_MINUTE",
+        ge=1,
+        le=600,
+    )
+
     # Abuse protection (single-process, in-memory sliding windows). Documented
     # in README; replace with a shared store when running multiple workers.
     rate_limit_login_per_minute: int = 10

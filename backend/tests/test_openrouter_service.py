@@ -415,10 +415,10 @@ def _analyze(client):
 
 def test_endpoint_reports_openrouter_provider_and_model(detect_client, monkeypatch):
     """The endpoint routes through _analyze_with_ai and never claims Gemini."""
-    async def fake_openrouter(content, content_type):
+    async def fake_openrouter(content, content_type, timeout=35.0):
         return _ai_result("openrouter", "google/gemini-3.5-flash")
 
-    async def forbidden_gemini(content, content_type):
+    async def forbidden_gemini(content, content_type, timeout=35.0):
         raise AssertionError("Gemini must not be called when OpenRouter succeeds")
 
     monkeypatch.setattr(detect, "is_openrouter_configured", lambda: True)
@@ -437,7 +437,7 @@ def test_endpoint_reports_openrouter_provider_and_model(detect_client, monkeypat
 
 def test_endpoint_falls_back_to_gemini_when_openrouter_fails(detect_client, monkeypatch):
     """A failed OpenRouter call falls through to Gemini, which is reported."""
-    async def failing_openrouter(content, content_type):
+    async def failing_openrouter(content, content_type, timeout=35.0):
         return {
             "status": "failed",
             "provider": "openrouter",
@@ -445,7 +445,7 @@ def test_endpoint_falls_back_to_gemini_when_openrouter_fails(detect_client, monk
             "result": None,
         }
 
-    async def fake_gemini(content, content_type):
+    async def fake_gemini(content, content_type, timeout=35.0):
         return _ai_result("gemini", "gemini-2.5-flash")
 
     monkeypatch.setattr(detect, "is_openrouter_configured", lambda: True)
@@ -462,10 +462,10 @@ def test_endpoint_falls_back_to_gemini_when_openrouter_fails(detect_client, monk
 
 def test_endpoint_reports_unavailable_when_both_providers_fail(detect_client, monkeypatch):
     """Both providers failing yields a clean rule-based response, never an error."""
-    async def failing_openrouter(content, content_type):
+    async def failing_openrouter(content, content_type, timeout=35.0):
         return {"status": "failed", "provider": "openrouter", "model": "m", "result": None}
 
-    async def failing_gemini(content, content_type):
+    async def failing_gemini(content, content_type, timeout=35.0):
         return {"status": "failed", "provider": "gemini", "model": "g", "result": None}
 
     monkeypatch.setattr(detect, "is_openrouter_configured", lambda: True)
@@ -487,7 +487,7 @@ def test_endpoint_reports_unavailable_when_both_providers_fail(detect_client, mo
 
 def test_endpoint_makes_no_ai_calls_without_keys(detect_client, monkeypatch):
     """Neither provider configured: no provider call is attempted at all."""
-    async def forbidden(content, content_type):
+    async def forbidden(content, content_type, timeout=35.0):
         raise AssertionError("No provider may be called without an API key")
 
     monkeypatch.setattr(detect, "is_openrouter_configured", lambda: False)

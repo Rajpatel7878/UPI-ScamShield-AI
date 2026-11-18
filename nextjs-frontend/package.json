@@ -10,12 +10,18 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@typescript-eslint/eslint-plugin": "^7.18.0",
+    "@typescript-eslint/parser": "^7.18.0",
+    "@typescript-eslint/typescript-estree": "^7.18.0",
+    "@typescript-eslint/utils": "^7.18.0",
     "axios": "^1.21.1",
     "lucide-react": "^1.72.0",
+    "minimatch": "^6.0.0",
     "next": "16.4.6",
     "react": "19.3.0",
     "react-dom": "19.3.0",
-    "recharts": "^3.10.1"
+    "recharts": "^3.10.1",
+    "typescript-eslint": "^8.72.2"
   },
   "devDependencies": {
     "@playwright/test": "^1.65.0",

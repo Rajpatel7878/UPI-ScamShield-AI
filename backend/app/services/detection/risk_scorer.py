@@ -12,10 +12,9 @@ Keep thresholds centralized so they can be calibrated later.
 """
 from __future__ import annotations
 
-from collections.abc import Iterable
 from typing import Any
 
-from .rules import DetectionRule, get_all_rules, RULE_NAME_MAP, SCORE_CONTRIBUTION_MAP, CATEGORY_GROUPS
+from .rules import DetectionRule, get_all_rules, SCORE_CONTRIBUTION_MAP, CATEGORY_GROUPS
 
 
 # Risk band thresholds - keep centralized for calibration

@@ -1,14 +1,11 @@
 """SQLAlchemy Scan model."""
 
 from __future__ import annotations
-
-from datetime import datetime, timezone
-
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, JSON, String
+from datetime import datetime, timezone
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, JSON, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.database.base import Base
-
+from app.database.base import Basefrom app.models.user import User
 
 class Scan(Base):
     """Scan model for storing analysis results.

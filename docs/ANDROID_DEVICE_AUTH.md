@@ -8,16 +8,19 @@
 
 ## 1. Overview
 
-The Android app must call protected endpoints (for example `POST /api/v1/detect/quick`
-in Phase 2) from a background notification listener. A background service cannot hold a
+The Android app calls protected endpoints (`POST /api/v1/detect/quick`, added in
+Phase 2) from a background notification listener. A background service cannot hold a
 user password, and the existing JWT is short-lived and cannot be revoked server-side.
 
 Phase 1 therefore adds a **per-install device credential**:
 
 ```text
 Android app ──(user JWT, once)──► POST /api/v1/devices/register ──► device token
-Android app ──(X-Device-Token)──► device-authenticated endpoints
+Android app ──(X-Device-Token)──► POST /api/v1/detect/quick (Phase 2)
 ```
+
+The quick detection endpoint and its privacy, AI-fallback and rate-limiting behaviour
+are documented in [`ANDROID_QUICK_DETECTION_API.md`](./ANDROID_QUICK_DETECTION_API.md).
 
 Device tokens are completely separate from user JWTs:
 
@@ -355,7 +358,11 @@ TOKEN=$(curl -s -X POST "$BASE/devices/register" -H "Authorization: Bearer $JWT"
   | python -c "import sys,json;print(json.load(sys.stdin)['token'])")
 
 curl -s "$BASE/devices" -H "Authorization: Bearer $JWT"
-# Device-authenticated endpoint arrives in Phase 2; until then expect 404/401 paths only.
+
+# Device-authenticated quick check (Phase 2; see the quick detection API doc).
+curl -s -X POST "$BASE/detect/quick" -H "X-Device-Token: $TOKEN" \
+  -H 'Content-Type: application/json' -d '{"text":"Your KYC is expired"}'
+
 curl -s -X DELETE "$BASE/devices/1" -H "Authorization: Bearer $JWT"
 ```
 
@@ -367,9 +374,12 @@ python -c "import sqlite3;print(sqlite3.connect('scamshield.db').execute('select
 
 ---
 
-## 12. Next step (Phase 2)
+## 12. Phase 2 status
 
-Implement `POST /api/v1/detect/quick` authenticated with
-`Depends(get_current_device)` and `X-Device-Token`, per sections 3.2 and 3.3 of
-`docs/ANDROID_IMPLEMENTATION_PLAN.md`. Do not add the endpoint before Phase 2: this phase
-intentionally exposes only device management and the reusable authentication dependency.
+Phase 2 is implemented: `POST /api/v1/detect/quick` authenticates with
+`Depends(get_current_device)` and `X-Device-Token`, and reuses the existing rule, URL,
+AI-fallback and hybrid scoring pipeline. See
+[`ANDROID_QUICK_DETECTION_API.md`](./ANDROID_QUICK_DETECTION_API.md).
+
+Device management endpoints and the authentication contract in this document are
+unchanged by Phase 2.

@@ -10,7 +10,7 @@ UPI ScamShield AI detection or authentication routes.
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 
@@ -107,7 +107,7 @@ async def database_health(
     """
     try:
         # Test read
-        result = db.execute(select(func.count(Scan.id))).scalar_one()
+        _ = db.execute(select(func.count(Scan.id))).scalar_one()  # Test read
         # Test write by adding a temporary marker and rolling back
         # (safe no-op; just validates write access)
         return {

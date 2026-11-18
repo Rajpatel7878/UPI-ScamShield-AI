@@ -45,6 +45,10 @@ ALLOWED_SORT_ORDER = {"asc", "desc"}
 
 RISK_PRIORITY = {"low": 1, "medium": 2, "high": 3, "critical": 4}
 
+# Default wall-clock bound for a full analysis. The quick detection endpoint
+# passes a shorter bound; existing endpoints keep this default.
+AI_DEFAULT_TIMEOUT_SECONDS = 35.0
+
 
 def _normalize_risk_level(level: Optional[str]) -> Optional[str]:
     if not level:
@@ -133,7 +137,11 @@ def _build_ai_analysis(
     }
 
 
-async def _analyze_with_gemini(content: str, content_type: str) -> Optional[dict[str, Any]]:
+async def _analyze_with_gemini(
+    content: str,
+    content_type: str,
+    timeout: float = AI_DEFAULT_TIMEOUT_SECONDS,
+) -> Optional[dict[str, Any]]:
     """Run Gemini analysis off the event loop, with a hard wall-clock bound."""
     if not is_gemini_configured():
         return None
@@ -144,8 +152,8 @@ async def _analyze_with_gemini(content: str, content_type: str) -> Optional[dict
 
     try:
         return await asyncio.wait_for(
-            asyncio.to_thread(service.analyze, content, content_type),
-            timeout=35.0,
+            asyncio.to_thread(service.analyze, content, content_type, timeout),
+            timeout=timeout,
         )
     except asyncio.TimeoutError:
         logger.warning("Gemini analysis timed out")
@@ -155,7 +163,11 @@ async def _analyze_with_gemini(content: str, content_type: str) -> Optional[dict
         return None
 
 
-async def _analyze_with_openrouter(content: str, content_type: str) -> Optional[dict[str, Any]]:
+async def _analyze_with_openrouter(
+    content: str,
+    content_type: str,
+    timeout: float = AI_DEFAULT_TIMEOUT_SECONDS,
+) -> Optional[dict[str, Any]]:
     """Run OpenRouter analysis off the event loop, with a hard wall-clock bound."""
     from app.services.detection.openrouter_service import OpenRouterService, is_openrouter_configured
 
@@ -168,8 +180,8 @@ async def _analyze_with_openrouter(content: str, content_type: str) -> Optional[
 
     try:
         return await asyncio.wait_for(
-            asyncio.to_thread(service.analyze, content, content_type),
-            timeout=35.0,
+            asyncio.to_thread(service.analyze, content, content_type, timeout),
+            timeout=timeout,
         )
     except asyncio.TimeoutError:
         logger.warning("OpenRouter analysis timed out")
@@ -179,16 +191,20 @@ async def _analyze_with_openrouter(content: str, content_type: str) -> Optional[
         return None
 
 
-async def _analyze_with_ai(content: str, content_type: str) -> Optional[dict[str, Any]]:
+async def _analyze_with_ai(
+    content: str,
+    content_type: str,
+    timeout: float = AI_DEFAULT_TIMEOUT_SECONDS,
+) -> Optional[dict[str, Any]]:
     """Run AI analysis, trying OpenRouter then Gemini, falling back to rule-based."""
     # Try OpenRouter first if configured
     if is_openrouter_configured():
-        openrouter_result = await _analyze_with_openrouter(content, content_type)
+        openrouter_result = await _analyze_with_openrouter(content, content_type, timeout=timeout)
         if openrouter_result and openrouter_result.get("status") == "completed":
             return openrouter_result
     # Fall back to Gemini if configured
     if is_gemini_configured():
-        gemini_result = await _analyze_with_gemini(content, content_type)
+        gemini_result = await _analyze_with_gemini(content, content_type, timeout=timeout)
         if gemini_result and gemini_result.get("status") == "completed":
             return gemini_result
     # No AI provider configured

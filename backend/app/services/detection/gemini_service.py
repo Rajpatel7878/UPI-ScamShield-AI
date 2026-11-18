@@ -12,10 +12,7 @@ import os
 import re
 import time
 from typing import Any
-from typing import Dict
 from typing import Optional
-from typing import Tuple
-from typing import Union
 
 from google import genai
 from google.genai import types
@@ -31,7 +28,6 @@ logger = logging.getLogger(__name__)
 
 def get_gemini_settings() -> dict:
     """Get Gemini configuration from application settings."""
-    settings = get_settings()
     return {
         "api_key": os.getenv("GEMINI_API_KEY"),
         "model": os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),

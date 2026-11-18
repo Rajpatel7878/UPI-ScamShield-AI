@@ -9,12 +9,12 @@ integration and hybrid scoring can be added in later phases.
 from __future__ import annotations
 
 import re
-from collections.abc import Set
 from typing import Any
 
 from .explanation_service import ExplanationService
 from .risk_scorer import RiskScorer
-from .rules import DetectionRule, get_all_rules, RULE_NAME_MAP, normalize_text, extract_urls, is_suspicious_shortened_url
+from .rules import DetectionRule, get_all_rules
+from .text_normalizer import normalize_text
 
 
 class RuleDetector:

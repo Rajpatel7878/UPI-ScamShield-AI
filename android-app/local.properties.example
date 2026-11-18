@@ -1,0 +1,18 @@
+# Copy this file to android-app/local.properties and edit it locally.
+# local.properties is gitignored and must never be committed.
+#
+# 1. sdk.dir points at your Android SDK installation.
+#    Windows (note the escaped colon and backslashes) or forward slashes both work:
+sdk.dir=C\:\\Users\\you\\AppData\\Local\\Android\\Sdk
+#
+# 2. Optional: default backend base URL baked into debug builds.
+#    The value must end with a slash. It is not a secret.
+#    Android emulator -> host machine:
+# SCAMSHIELD_BASE_URL=http://10.0.2.2:8000/
+#    Physical phone on the same Wi-Fi (use your laptop's LAN IP):
+# SCAMSHIELD_BASE_URL=http://192.168.1.20:8000/
+#    HTTPS tunnel (Cloudflare/ngrok), required for release builds:
+# SCAMSHIELD_BASE_URL=https://your-tunnel.example.com/
+SCAMSHIELD_BASE_URL=http://10.0.2.2:8000/
+
+# Do not put API keys, device tokens or passwords in this file or in the APK.

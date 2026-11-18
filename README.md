@@ -196,6 +196,7 @@ UPI-ScamShield-AI/
 ├── docs/
 │   ├── ANDROID_IMPLEMENTATION_PLAN.md
 │   ├── ANDROID_DEVICE_AUTH.md
+│   ├── ANDROID_QUICK_DETECTION_API.md
 │   ├── PRE_DEPLOYMENT_AUDIT.md
 │   └── FINAL_PRE_DEPLOYMENT_AUDIT_REPORT.md
 │
@@ -258,6 +259,11 @@ Android device credentials (see [`docs/ANDROID_DEVICE_AUTH.md`](docs/ANDROID_DEV
 # Lifetime of a device token, and how many live devices one user may have.
 DEVICE_TOKEN_EXPIRE_DAYS=90
 MAX_ACTIVE_DEVICES_PER_USER=5
+
+# Android quick detection: no persistence by default, bounded AI, per-device limit.
+STORE_QUICK_SCANS=false
+QUICK_SCAN_AI_TIMEOUT_SECONDS=4.5
+RATE_LIMIT_QUICK_SCAN_PER_MINUTE=30
 ```
 
 Keep all API keys private. Never commit `.env` to GitHub.
