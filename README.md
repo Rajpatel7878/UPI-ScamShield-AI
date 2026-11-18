@@ -409,15 +409,29 @@ All build and test commands verified successfully on November 18, 2026:
 | `npm run build` | Passed, 2,595 modules transformed |
 | `npm run lint` | 0 errors, 9 warnings (Fast Refresh) |
 
-### Phase 7 Screenshots (add later)
+### 📸 Phase 7 Screenshots
 
 | Application | Screenshot |
 |---|---|
 | Dashboard | `screenshots/dashboard-phase7.png` |
 | History | `screenshots/history-phase7.png` |
-| Detection Details | `screenshots/details-phase7.png` |
+| Detection Result | `screenshots/details-phase7.png` |
 
-*Add real screenshots from a running Android emulator before final submission.*
+**Capture from Android Emulator:**
+
+1. Start the Android Studio emulator with the `android-app` module
+2. Run the app: `.\gradlew :app:installDebug`
+3. Navigate to each screen:
+   - **Dashboard**: Risk distribution tiles, protection status, recent detections
+   - **History**: Risk filter, sort order, search, pagination records
+   - **Detection Details**: Risk score, level badge, category, reasons, source app, timestamp
+4. Use Android Studio's `Device Manager` or `adb exec screencap` to capture PNG screenshots
+5. Place them in `docs/screenshots/` or `README.md` sibling directory
+6. Update the image paths above
+
+**Alternative:** If no emulator is available, use the Android Studio UI preview or export UI snapshots from the Compose preview mode.
+
+> *Screenshots are marked as a manual action in the submission checklist – they must be captured from a working instance before final submission.*
 
 ### 🎥 Demo Video
 
