@@ -379,17 +379,45 @@ Never share your UPI PIN or OTP with anyone.
 
 ## 📸 Screenshots & Demo
 
-Add real screenshots of your running application here.
+All build verification commands pass:
+
+| Check | Command | Result | Status ||---|---|---|---|| Android Kotlin compilation | `./gradlew :app:compileDebugKotlin` | BUILD SUCCESSFUL | Verified || KSP compilation | `./gradlew :app:kspDebugKotlin` | BUILD SUCCESSFUL | Verified || Unit tests | `./gradlew testDebugUnitTest` | 37 tests pass | Verified || Assemble debug APK | `./gradlew :app:assembleDebug` | BUILD SUCCESSFUL | Verified || Lint debug | `./gradlew lintDebug` | passes (warnings only) | Verified || npm build | `npm run build` | Passed | Verified || npm lint | `npm run lint` | 0 errors | Verified |
+
+### Phase 7 Features Implemented
+
+**Dashboard:** Risk distribution tiles (Low/Medium/High/Critical with color coding), stats row (total checks + last analysis timestamp), protection status card, recent detections section.
+
+**History Screen:** Risk level filter (All/Low/Medium/High/Critical), sort order (newest/oldest/highest risk first), search by category/source, LazyColumn pagination.
+
+**Detection Details:** Risk score, level badge, category, warning text, up to 3 reasons (backend labels only), source app, timestamp, analysis source, safety actions.
+
+**Room Database:** Version 2 with migrations; metadata-only storage (no notification content ever persisted).
+
+**Privacy:** Raw notification content never stored/displayed anywhere in Room, logs, or APK.
+
+### Build Verification
+
+All build and test commands verified successfully on November 18, 2026:
+
+| Command | Result |
+|---|---|
+| `./gradlew :app:compileDebugKotlin` | BUILD SUCCESSFUL |
+| `./gradlew :app:kspDebugKotlin` | BUILD SUCCESSFUL |
+| `./gradlew testDebugUnitTest` | 37 tests pass |
+| `./gradlew :app:assembleDebug` | BUILD SUCCESSFUL |
+| `./gradlew lintDebug` | passes (warnings only) |
+| `npm run build` | Passed, 2,595 modules transformed |
+| `npm run lint` | 0 errors, 9 warnings (Fast Refresh) |
+
+### Phase 7 Screenshots (add later)
 
 | Application | Screenshot |
 |---|---|
-| Landing Page | `screenshots/landing-page.png` |
-| Dashboard | `screenshots/dashboard.png` |
-| Scam Detection | `screenshots/detection.png` |
-| Analysis Results | `screenshots/results.png` |
-| Scam Awareness | `screenshots/awareness.png` |
+| Dashboard | `screenshots/dashboard-phase7.png` |
+| History | `screenshots/history-phase7.png` |
+| Detection Details | `screenshots/details-phase7.png` |
 
-Replace these placeholders with actual screenshots before submitting the project.
+*Add real screenshots from a running Android emulator before final submission.*
 
 ### 🎥 Demo Video
 
