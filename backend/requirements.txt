@@ -17,3 +17,4 @@ email-validator==2.3.0
 
 # Optional AI analysis (backend-only API key)
 google-genai==3.0.0
+httpx==0.28.1
